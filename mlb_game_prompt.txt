@@ -159,9 +159,33 @@ For each starting pitcher pull from Fangraphs:
 
   CAREER HISTORY vs today's lineup (Fangraphs or Baseball Reference):
   - Check if any key batters (1-5 in order) have 10+ PA vs this pitcher
-  - For those batters: career AB, H, HR, BB, K, OPS
-  - Flag if a top-3 hitter is historically strong vs this pitcher: ⚠️ MATCHUP HISTORY
-  - Flag if pitcher has historically dominated this lineup: ✅ PITCHER EDGE
+  - For those batters: career AB, H, HR, BB, K, OPS, K%
+
+  CAREER MATCHUP CREDIBILITY GATE (run for every career matchup used):
+  Pull from Baseball Savant — filter by batter + pitcher pairing:
+    - Avg exit velocity in career matchup ABs
+    - xBA in career matchup ABs
+    - Hard Hit % in career matchup ABs
+    - K rate in career matchup ABs
+
+  Credibility scoring:
+    HIGH CREDIBILITY (career advantage is real skill):
+      Career OPS ≥ .800 AND xBA within 30 pts of BA AND Hard Hit % ≥ 40%
+      → ✅ MATCHUP EDGE CONFIRMED — apply full weight to projection
+    LUCKY (career advantage is BABIP-driven):
+      Career OPS ≥ .800 BUT xBA ≥ 60 pts below BA (soft contact getting through)
+      → 🔄 MATCHUP LUCK — do not credit, regress to season splits
+    DOMINATED (pitcher has real edge):
+      Career OPS ≤ .550 AND K% ≥ 35% in those PAs AND xBA confirms
+      → ⚠️ PITCHER OWNS BATTER CONFIRMED — suppress offensive projection
+
+  PITCHER EVOLUTION FLAG (critical for multi-year career data):
+  Compare pitcher's 2026 pitch mix and velocity vs 2024-2025:
+    - Velocity change ≥ 1.5 mph (lost or gained): flag ⚠️ ARSENAL CHANGE
+    - New primary pitch added (e.g. added sweeper): flag ⚠️ ARSENAL CHANGE
+    - Pitch mix shift ≥ 10% usage on any pitch: flag ⚠️ ARSENAL CHANGE
+    If ARSENAL CHANGE flagged: career matchup data is stale → reduce career weight by 50%
+    If no change: career data carries full credibility weight
 
 For each team offense pull from Fangraphs:
   CURRENT SEASON:
@@ -205,6 +229,45 @@ For each team offense pull from Fangraphs:
       Elite defense (OAA ≥ +20): flag ✅ DEFENSE EDGE — pitcher's BABIP suppressed → fewer hits
       Poor defense (OAA ≤ -15): flag ⚠️ DEFENSE DRAG — pitcher's BABIP inflated → more hits
       Adjustment applied in Phase 5 Step 3b
+
+  LINEUP QUALITY + PERFECT STORM CHECK (run for each team, Phase 6 modifier):
+
+  Step A — Lineup completeness:
+    Compare today's confirmed lineup vs full-strength expected lineup
+    For each starter missing with wRC+ > 125 vs pitcher hand:
+      1 missing: team wRC+ vs hand -5 pts for today's projection
+      2+ missing: team wRC+ vs hand -10 pts
+    Flag: ⚠️ DEPLETED LINEUP
+
+  Step B — Top-3 matchup check (use credibility-gated career data):
+    Pull career stats for batters in lineup spots 1-4 vs today's pitcher (20+ PA, credibility gated):
+      2+ of top 4 with CONFIRMED career OPS ≥ .900: team proj × 1.06 | ✅ TOP ORDER OWNS HIM
+      2+ of top 4 with CONFIRMED career OPS ≤ .550: team proj × 0.94 | ⚠️ TOP ORDER STRUGGLES
+    If career data is stale (ARSENAL CHANGE flagged): skip, use splits only
+
+  Step C — Pitcher shaky streak check:
+    Last 3 starts: ERA, Hard Hit % allowed, velocity trend
+      ERA > 5.00 last 3 starts: ⚠️ SHAKY STRETCH
+      Velocity down ≥ 1.5 mph last 3 starts: ⚠️ VELOCITY DROP
+      Hard Hit % spiking last 3 starts (≥ 42%): ⚠️ GETTING SQUARED UP
+
+  GAME-LEVEL PERFECT STORM FLAG:
+  Score the following and sum for each team's offensive matchup:
+    □ Top order CONFIRMED owns this pitcher (2+ batters):     +2 pts
+    □ Pitcher in shaky stretch (ERA > 5.00 last 3):           +1 pt
+    □ Pitcher velocity dropping:                               +1 pt
+    □ Team in 15-day CONFIRMED hot streak:                    +1 pt
+    □ Team platoon edge (wRC+ vs hand ≥ 115):                 +1 pt
+    □ Favorable park (run factor > 105):                      +0.5 pt
+    □ Favorable weather (wind 10+ mph out):                   +0.5 pt
+    □ BABIP regression due (pitcher BABIP > .330):             +1 pt
+    □ Depleted lineup (opposing team missing key bats):       -1 pt
+    □ Career data stale (ARSENAL CHANGE):                     -1 pt
+
+  5+ pts: 🌪️ PERFECT STORM — flag in edge table, bump confidence to ⭐⭐⭐
+  3.5-4.5: ⛈️ STRONG CONVERGENCE — ⭐⭐ Solid
+  2-3: 🌧️ MODERATE EDGE — ⭐ Lean
+  < 2: no storm flag
 
 Park factors (pull from Fangraphs park factors page):
   - 1-year and 3-year park factor for runs
@@ -403,8 +466,8 @@ Edge thresholds:
 
 Rank ALL games by edge size:
 
-| Rank | Game | Bet type | Model proj | Vegas line | Edge | Weather boost | Confidence |
-|------|------|----------|------------|------------|------|---------------|------------|
+| Rank | Game | Bet type | Model proj | Vegas line | Edge | Storm flag | Confidence |
+|------|------|----------|------------|------------|------|------------|------------|
 
 ════════════════════════════════════════════════════════════════
 PHASE 8 — PICK OUTPUT (top plays only — wherever edge exists)
@@ -502,6 +565,33 @@ Check ESPN final scores for:
 For each pick:
 RESULT | Pick: [pick] | Final: [score] | Outcome: WIN/LOSS/PUSH | P&L: [units]
 Model note: [one sentence — what did the model get right or wrong? Reference SIERA/xFIP accuracy]
+Storm note: [if flagged as Perfect Storm or Strong Convergence — did the factors hold?]
+
+SEASONAL CALIBRATION LOG (update monthly):
+Track the following to adapt model weights over the course of 2026:
+
+  Career matchup credibility:
+    □ Statcast-CONFIRMED career advantages: W/L rate vs all picks
+    □ BABIP-LUCKY career "advantages": W/L rate (expect worse — validates the gate)
+    → If confirmed advantages hit ≥ 60%: increase career weight from 25% → 30%
+    → If lucky plays hit < 45%: confirms gate is working, keep discarding them
+
+  Perfect Storm accuracy:
+    □ 🌪️ PERFECT STORM plays W/L rate (target ≥ 65%)
+    □ ⛈️ STRONG CONVERGENCE plays W/L rate (target ≥ 58%)
+    □ 🌧️ MODERATE EDGE plays W/L rate (target ≥ 53%)
+    → If storm plays underperform target by May 1: review which PSS factors are missing
+    → If storm plays outperform: consider lowering threshold from 5 pts to 4.5 pts
+
+  Pitcher evolution flag accuracy:
+    □ Plays where ARSENAL CHANGE flagged and career data was discarded: did the right call?
+    → Note which pitchers' career history proved predictive despite arsenal change
+
+  Buy-the-dip accuracy:
+    □ 🔄 BOX SCORE NOISE + over → hit rate (target ≥ 58%)
+    → High hit rate validates the Statcast gate. Low hit rate means tighten the divergence threshold.
+
+  Log these calibration notes to betting_tracker.py context card monthly.
 
 ════════════════════════════════════════════════════════════════
 LOGGING REMINDER

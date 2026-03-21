@@ -238,13 +238,43 @@ For each batter prop, pull from Fangraphs:
   → Flag if platoon split is extreme (>30 wRC+ gap): ⚠️ PLATOON DISADVANTAGE or ✅ PLATOON EDGE
   → Example: batter with .310 BA vs RHP but .220 BA vs LHP facing LHP = fade the over on hits
 
-  BATTER vs PITCHER CAREER HISTORY:
-    - Career AB, H, HR, BB, K, OPS vs this specific pitcher
-    - Minimum sample: 10 PA to be meaningful
-    - If < 10 PA: note as ⚠️ SMALL SAMPLE — use splits instead
-    - If 20+ PA: weight career OPS at 25% alongside current season splits
-    - Flag if batter is historically dominant (OPS ≥ .950 vs pitcher): ✅ MATCHUP EDGE
-    - Flag if pitcher historically dominates batter (OPS ≤ .550, K rate ≥ 35%): ⚠️ AVOID OVER
+  BATTER vs PITCHER CAREER HISTORY + CREDIBILITY GATE:
+    Pull from Baseball Savant (filter by batter + pitcher pairing):
+      - Career AB, H, HR, BB, K, OPS, K%
+      - Avg exit velocity IN THOSE CAREER ABs
+      - xBA IN THOSE CAREER ABs
+      - Hard Hit % IN THOSE CAREER ABs
+      - Barrel % IN THOSE CAREER ABs
+
+    Minimum sample: 10 PA to use at all. < 10 PA → ignore, use hand splits only.
+
+    CREDIBILITY GATE — is the career advantage real or BABIP-driven?
+    HIGH CREDIBILITY — advantage is real skill:
+      Career OPS ≥ .800 AND xBA within 30 pts of career BA AND Hard Hit % ≥ 40%
+      → ✅ MATCHUP EDGE CONFIRMED
+      → Weight: if 20+ PA, career BA carries 25% in hit rate formula
+      → If 30+ PA: career BA carries 30% weight (larger sample, more confidence)
+    LUCKY — advantage is soft contact getting through:
+      Career OPS ≥ .800 BUT xBA ≥ 60 pts BELOW career BA
+      → 🔄 MATCHUP LUCK — do not credit career data
+      → Use hand splits only, treat as no career advantage
+    CONFIRMED DOMINATED — pitcher genuinely owns this batter:
+      Career OPS ≤ .550 AND K% ≥ 35% in those PAs AND xBA confirms low contact quality
+      → ⚠️ PITCHER OWNS BATTER CONFIRMED — reduce hit rate by additional 5%
+    DOMINATED BUT LUCKY FOR PITCHER:
+      Career OPS ≤ .550 BUT xBA in those PAs is near league avg (.250+)
+      → 🔄 PITCHER LUCK — pitcher got away with it, not a reliable advantage
+      → Use hand splits, don't suppress further
+
+    PITCHER EVOLUTION FLAG (staleness check):
+    Compare pitcher's 2026 arsenal vs 2024-2025:
+      - Velocity change ≥ 1.5 mph: ⚠️ ARSENAL CHANGE
+      - New primary pitch added or removed: ⚠️ ARSENAL CHANGE
+      - Pitch usage shift ≥ 10% on any pitch: ⚠️ ARSENAL CHANGE
+    If ARSENAL CHANGE: career matchup data is stale
+      → Cut career weight in half (25% → 12.5%, or 30% → 15%)
+      → Note: "Career data pre-dates arsenal change — reduced weight applied"
+    If NO CHANGE: full credibility weight applies
 
   From Baseball Savant:
     - Exit velocity avg
@@ -503,6 +533,66 @@ Stack plays (note if multiple props from same game align):
   If pitcher has high K projection AND opposing team has low hit projections = STACK
   If weather is strongly out AND batter has high TB/HR projection = STACK
 
+════════════════════════════════════════════════════════════════
+PERFECT STORM SCORING SYSTEM (PSS)
+════════════════════════════════════════════════════════════════
+
+Run PSS for every batter prop before finalizing confidence.
+Score each factor that aligns in the SAME direction as your pick.
+
+FOR BATTER OVER PROPS (hits, TB, HR):
+
+  BATTER ADVANTAGES:
+  □ Career OPS ≥ .900 vs this pitcher AND Statcast-confirmed (xBA + HH% support it)  → 2 pts
+  □ Career OPS ≥ .750 vs this pitcher AND Statcast-confirmed                          → 1 pt
+  □ 15-day CONFIRMED hot streak (Case 2 or higher from form weight logic)             → 1 pt
+  □ 7-day EARLY SIGNAL only (Case 3)                                                  → 0.5 pt
+  □ Platoon edge (wRC+ vs pitcher hand ≥ 115)                                        → 1 pt
+  □ Sweet Spot Rate ≥ 40% + Hard Hit % ≥ 42% (true quality contact)                 → 1 pt
+  □ Chase Rate mismatch favors batter (disciplined batter vs non-chase pitcher)       → 0.5 pt
+
+  PITCHER DISADVANTAGES (working in batter's favor):
+  □ Pitcher shaky last 3 starts (ERA > 5.00 OR velocity down ≥ 1.5 mph)             → 1 pt
+  □ Pitcher Hard Hit % allowed spiking last 3 starts (≥ 42%)                        → 0.5 pt
+  □ Pitcher BABIP > .330 last 15 days (been getting hit hard, unlucky or not)        → 0.5 pt
+  □ Pitcher IVB/VAA/Extension NOT elite (no Tier 2 marks) → easier to square up      → 0.5 pt
+
+  SITUATIONAL BOOSTERS:
+  □ Favorable park (HR factor > 110 or high BABIP park)                              → 0.5 pt
+  □ Favorable weather (wind ≥ 10 mph out toward pull side)                           → 0.5 pt
+  □ Line not moved despite all above (public hasn't noticed)                         → 1 pt
+  □ BUY THE DIP scenario (batter in visible slump, Statcast fine, line deflated)     → 1.5 pt
+
+  DEDUCTIONS:
+  □ Career sample < 20 PA (limited matchup data)                                     → -1 pt
+  □ Pitcher ARSENAL CHANGE since career ABs (stale matchup data)                     → -1 pt
+  □ Batter early season < 100 PA (small sample)                                      → -0.5 pt
+  □ Lineup uncertainty (batter batting order not confirmed)                           → -0.5 pt
+  □ Unfavorable weather (wind ≥ 10 mph in)                                           → -0.5 pt
+
+FOR PITCHER OVER K PROPS:
+  □ Pitcher Chase Rate induced ≥ 33% AND team Chase Rate ≥ 30%                      → 1.5 pt
+  □ Pitcher K% vs lineup hand ≥ 28%                                                  → 1 pt
+  □ Elite catcher FRV ≥ +8                                                           → 1 pt
+  □ 2+ Tier 2 pitch quality marks (IVB/VAA/Extension elite)                         → 1 pt
+  □ Lineup has 4+ batters with K% > 27% vs pitcher hand                             → 1 pt
+  □ Pitcher in confirmed form (velocity stable, CSW% trending up last 3 starts)      → 1 pt
+  □ Career K rate ≥ 35% vs key batters (20+ PA, Statcast-confirmed)                 → 1 pt
+  □ Line not moved                                                                    → 1 pt
+  □ Poor framing catcher (FRV ≤ -8)                                                 → -1 pt
+  □ LOW-K LINEUP (4+ batters with K% < 18% vs hand)                                 → -1 pt
+
+PSS RESULT TABLE:
+  5+ pts:   🌪️ PERFECT STORM    → ⭐⭐⭐ Strong | max units
+  3.5-4.5:  ⛈️ STRONG CONVERGENCE → ⭐⭐ Solid  | standard units
+  2-3 pts:  🌧️ MODERATE EDGE    → ⭐ Lean     | 0.5u only
+  < 2 pts:  no storm flag       → skip or pass
+
+Show PSS in pick output:
+  PSS: [X pts] — [🌪️/⛈️/🌧️] [list top 3 factors that scored]
+
+════════════════════════════════════════════════════════════════
+
 Buy-the-dip flags (highest value plays — fade public narrative):
   🔄 BOX SCORE NOISE + over line deflated = BUY THE DIP
     → Batter in visible slump, Statcast stable, line dropped below model projection
@@ -541,10 +631,16 @@ Weather:            [temp, wind, adjustment applied]
 Park factor:        [park name, HR factor, lean]
 Early season note:  [SMALL SAMPLE — blended with 2025 / Full 2026 sample]
 
+Perfect Storm Score: [X pts] — [🌪️ PERFECT STORM / ⛈️ STRONG CONVERGENCE / 🌧️ MODERATE EDGE]
+Top PSS factors:    • [Factor 1] • [Factor 2] • [Factor 3]
+
 Top 3 model drivers:
   • [Key metric #1 — the specific matchup stat driving the edge]
   • [Key metric #2 — supporting Statcast or split data]
   • [Key metric #3 — park/weather/lineup/situational]
+
+Career matchup:     [CONFIRMED EDGE / MATCHUP LUCK / NO DATA / PITCHER OWNS BATTER — note sample size]
+Pitcher evolution:  [NO CHANGE — career data full weight / ARSENAL CHANGE — career weight halved]
 
 The edge in one sentence:
 [Simple, clear, repeatable on video]
@@ -607,6 +703,33 @@ Check ESPN box scores for:
 For each pick:
 RESULT | Player: [name] | Prop: [pick] | Actual: [X Ks / X hits / X TB] | Outcome: WIN/LOSS/PUSH | P&L: [units]
 Model note: [one sentence — did the matchup data hold? What was the delta?]
+Storm note: [if PSS flagged — which factors held, which missed?]
+Career note: [if career matchup was weighted — did the real vs lucky classification prove correct?]
+
+SEASONAL CALIBRATION LOG (review monthly — adapt model weights):
+
+  Perfect Storm accuracy targets:
+    🌪️ PERFECT STORM (5+ pts):      target W% ≥ 65%
+    ⛈️ STRONG CONVERGENCE (3.5-4.5): target W% ≥ 58%
+    🌧️ MODERATE EDGE (2-3):          target W% ≥ 53%
+    → If storm plays beat target through May: lower threshold to 4.5 pts
+    → If storm plays miss target: review which PSS factors are false signals, remove or reduce
+
+  Career matchup credibility calibration:
+    □ CONFIRMED EDGE plays W% (target ≥ 60%) — validates Statcast gate
+    □ MATCHUP LUCK plays W% (expect ≤ 45%) — if higher, gate too aggressive
+    □ PITCHER OWNS BATTER plays W% for unders (target ≥ 58%)
+    □ ARSENAL CHANGE halved-weight plays: track if full weight would have been better or worse
+    → By June: adjust career BA weight (currently 25-30%) based on actual outcomes
+
+  Form weight calibration:
+    □ DOUBLE-CONFIRMED (45% weight) hit rate vs baseline
+    □ BOX SCORE NOISE fades (buy-the-dip) hit rate — target ≥ 58%
+    → If BOX SCORE NOISE fades miss consistently: tighten Statcast gate (require all 3 metrics)
+    → If CONFIRMED form plays miss: reduce weight from 30% toward 20%
+
+  Log calibration updates to betting_tracker.py context card each month.
+  Note: model should get sharper as sample builds. Trust the process through April.
 
 ════════════════════════════════════════════════════════════════
 LOGGING REMINDER
