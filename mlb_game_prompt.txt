@@ -112,10 +112,27 @@ For each starting pitcher pull from Fangraphs:
   PRIOR SEASON (2025) — for early season blending:
   - SIERA, xFIP, K-BB%, Hard Hit % allowed, Barrel % allowed
 
-  SPLITS:
-  - vs LHB and vs RHB (SIERA split, K%, BB% if available)
-  - Home vs Away ERA/FIP
-  - Last 3 starts: IP, ER, K, BB, HR (rolling form)
+  SPLITS — pull all of these from Fangraphs splits tab:
+  vs LHB:
+    - ERA, FIP, SIERA (if available), xFIP
+    - K%, BB%, HR/9
+    - Hard Hit % allowed, Barrel % allowed
+    - WHIP
+  vs RHB:
+    - ERA, FIP, SIERA (if available), xFIP
+    - K%, BB%, HR/9
+    - Hard Hit % allowed, Barrel % allowed
+    - WHIP
+  → Flag if split gap is ≥ 0.50 ERA points: ⚠️ PLATOON SPLIT
+
+  Home vs Away ERA/FIP
+  Last 3 starts: IP, ER, K, BB, HR (rolling form)
+
+  CAREER HISTORY vs today's lineup (Fangraphs or Baseball Reference):
+  - Check if any key batters (1-5 in order) have 10+ PA vs this pitcher
+  - For those batters: career AB, H, HR, BB, K, OPS
+  - Flag if a top-3 hitter is historically strong vs this pitcher: ⚠️ MATCHUP HISTORY
+  - Flag if pitcher has historically dominated this lineup: ✅ PITCHER EDGE
 
 For each team offense pull from Fangraphs:
   CURRENT SEASON:
@@ -124,14 +141,28 @@ For each team offense pull from Fangraphs:
   - Team K%, BB%
   - Team ISO (isolated power)
   - Team BABIP
-  - vs LHP wRC+ and vs RHP wRC+ (splits)
   - Last 7 days: runs scored per game, wRC+
+
+  HANDEDNESS SPLITS (critical — always apply vs opposing pitcher hand):
+  - Team wRC+ vs LHP and vs RHP
+  - Team OPS vs LHP and vs RHP
+  - Team K% vs LHP and vs RHP
+  - Team ISO vs LHP and vs RHP
+  - Note if lineup is stacked same-hand as pitcher (e.g. LH-heavy lineup vs LHP = bad)
+  - Note if platoon splits are extreme (>20 wRC+ gap vs hand) — flag as key driver
+
+  INDIVIDUAL BATTER SPLITS (for key lineup spots 1-5):
+  - Each batter's wRC+ vs pitcher hand (current season + 2025 blend if small sample)
+  - Batter's career stats vs this specific pitcher if 10+ PA:
+      AB, H, HR, BB, K, OPS — flag as MATCHUP HISTORY
+  - Flag if a top batter has severe platoon disadvantage vs today's pitcher
 
   From Baseball Savant (Statcast):
   - Team Hard Hit % (exit velocity 95+ mph)
   - Team Barrel %
   - Team xBA, xSLG, xwOBA
   - Average Exit Velocity
+  - Team Hard Hit % vs LHP and vs RHP (if available)
 
 Park factors (pull from Fangraphs park factors page):
   - 1-year and 3-year park factor for runs
@@ -150,9 +181,22 @@ STEP 1: Blend SIERA and xFIP into composite ERA estimate
   Composite ERA = (starts/8 × 2026 Composite) + ((8-starts)/8 × 2025 Composite)
   Flag with ⚠️ SMALL SAMPLE if blended
 
-STEP 2: Adjust for opponent offense
-  Opponent Offensive Adjustment = (opponent wRC+ vs pitcher hand) / 100
-  Adjusted ERA = Composite ERA × Opponent Offensive Adjustment
+STEP 2: Adjust for opponent offense (USE HANDEDNESS SPLITS)
+  Pull team wRC+ vs pitcher hand (LHP or RHP):
+    Opponent Offensive Adjustment = (team wRC+ vs pitcher hand) / 100
+    Adjusted ERA = Composite ERA × Opponent Offensive Adjustment
+
+  Also pull pitcher's own splits vs opposing lineup hand:
+    Pitcher SIERA vs LHB and vs RHB (from Fangraphs splits tab)
+    Pitcher K% vs LHB and vs RHB
+    Pitcher BB% vs LHB and vs RHB
+    If pitcher has a severe platoon split (>0.50 ERA diff vs hand):
+      Use hand-specific SIERA instead of overall SIERA
+      Flag: ⚠️ PLATOON SPLIT — pitcher notably worse vs [LHB/RHB]
+
+  Lineup composition check:
+    Count LHB vs RHB in projected starting lineup (1-9)
+    If 6+ batters share handedness advantage vs pitcher: note as LINEUP EDGE
 
 STEP 3: Apply park factor
   Park Adjusted ERA = Adjusted ERA × (park factor / 100)

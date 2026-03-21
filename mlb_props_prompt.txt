@@ -62,20 +62,31 @@ Props available:
 STEP 1: Pull pitcher K rate data from Fangraphs
   Current season (2026):
     - K% overall
-    - K% vs LHB and K% vs RHB (splits)
-    - BB%
     - CSW% (called strikes + whiffs %) from Savant
     - SwStr% (swinging strike %)
     - Whiff % by pitch type (Savant)
     - Number of starts (for early season flag)
 
+  HANDEDNESS SPLITS (from Fangraphs splits tab):
+  vs LHB:
+    - K%, BB%, ERA, WHIP, Hard Hit % allowed, Barrel % allowed
+    - CSW% vs LHB (Savant if available)
+  vs RHB:
+    - K%, BB%, ERA, WHIP, Hard Hit % allowed, Barrel % allowed
+    - CSW% vs RHB (Savant if available)
+  → Use the split matching the opposing lineup's dominant hand
+  → Flag if pitcher has ≥5% K% gap by hand: ⚠️ PLATOON SPLIT — adjust projection
+
   Prior season (2025) — for early season blend:
-    - K%, K% splits, CSW%, SwStr%
+    - K% overall, K% vs LHB, K% vs RHB, CSW%, SwStr%
 
 STEP 2: Pull opponent lineup K rate from Fangraphs
   - Team K% vs LHP (if pitcher is LH) or vs RHP (if pitcher is RH)
-  - Last 7 days team K rate
-  - Individual batter K% for batters projected to face this pitcher 3+ times
+  - Last 7 days team K rate vs pitcher hand
+  - Individual batter K% vs pitcher hand for each batter in lineup (1-9)
+  - Individual batter career K% vs this pitcher (if 10+ PA)
+  - Flag if lineup has 4+ batters with K% >27% vs pitcher hand: ✅ HIGH-K LINEUP
+  - Flag if lineup has 4+ batters with K% <18% vs pitcher hand: ⚠️ LOW-K LINEUP
 
 STEP 3: Estimate plate appearances
   Expected PA = Expected IP × (PA per inning estimate)
@@ -84,10 +95,14 @@ STEP 3: Estimate plate appearances
   Short rest cap: 5.0 IP
 
 STEP 4: Project strikeouts
-  Base K rate = blended pitcher K% (2026 + 2025 if small sample)
+  Base K rate = blended pitcher K% vs opposing lineup's dominant hand
+    (use vs LHB split if LH-heavy lineup, vs RHB if RH-heavy, overall if mixed)
   Opponent K rate adjustment:
-    Adjusted K% = Base K% × (opponent K% vs hand / MLB avg K% vs hand)
+    Adjusted K% = Base K% vs hand × (opponent team K% vs pitcher hand / MLB avg K% vs hand)
     MLB avg K%: ~22%
+  Career matchup adjustment:
+    If key batters (accounting for 3+ PA each) have career K% vs this pitcher ≥35%: × 1.05
+    If key batters have career K% vs this pitcher ≤15%: × 0.95
   Projected K = Adjusted K% × Expected PA
 
   Early season blend:
@@ -157,7 +172,6 @@ For each batter prop, pull from Fangraphs:
   Current season (2026):
     - BA, OBP, SLG, wOBA
     - wRC+ overall
-    - wRC+ vs LHP (if pitcher is LH) or vs RHP (if pitcher is RH)
     - K%, BB%, ISO
     - BABIP (note if elevated — regression risk)
     - PA count (for early season flag — threshold: 100 PA)
@@ -165,36 +179,60 @@ For each batter prop, pull from Fangraphs:
   Prior season (2025) — for early season blend:
     - BA, wRC+, ISO, wRC+ splits by hand
 
+  HANDEDNESS SPLITS (pull from Fangraphs splits tab — always use vs pitcher hand):
+  vs LHP:
+    - BA, OBP, SLG, wRC+, K%, BB%, ISO, BABIP
+  vs RHP:
+    - BA, OBP, SLG, wRC+, K%, BB%, ISO, BABIP
+  → Always use the split matching the opposing pitcher's hand
+  → Flag if platoon split is extreme (>30 wRC+ gap): ⚠️ PLATOON DISADVANTAGE or ✅ PLATOON EDGE
+  → Example: batter with .310 BA vs RHP but .220 BA vs LHP facing LHP = fade the over on hits
+
+  BATTER vs PITCHER CAREER HISTORY:
+    - Career AB, H, HR, BB, K, OPS vs this specific pitcher
+    - Minimum sample: 10 PA to be meaningful
+    - If < 10 PA: note as ⚠️ SMALL SAMPLE — use splits instead
+    - If 20+ PA: weight career OPS at 25% alongside current season splits
+    - Flag if batter is historically dominant (OPS ≥ .950 vs pitcher): ✅ MATCHUP EDGE
+    - Flag if pitcher historically dominates batter (OPS ≤ .550, K rate ≥ 35%): ⚠️ AVOID OVER
+
   From Baseball Savant:
     - Exit velocity avg
-    - Hard hit % (95+ mph)
+    - Hard hit % (95+ mph) overall AND vs pitcher hand if available
     - Barrel %
     - xBA, xSLG, xwOBA
-    - Whiff % (affects K prop + hits prop)
+    - Whiff % overall AND vs pitcher hand (affects K prop + hits prop)
     - Sprint speed (affects infield hits / SB props)
     - Pull % (affects HR projection vs park RF/LF)
 
   Rolling stats from Fangraphs:
-    - Last 7 days: BA, wRC+, HR, SLG
+    - Last 7 days: BA, wRC+, HR, SLG (hot/cold streak flag)
     - Last 14 days: same
     - Last 30 days: same
-
-  Matchup history:
-    - Career vs this pitcher (AB, H, HR, K) — note if < 10 AB (small sample)
-    - Recent season vs pitcher hand
+    → If 7-day BA diverges >50 pts from vs-hand split: apply 30% weight to recent form
 
 ── HITS PROJECTION ───────────────────────────────────────────
 
-STEP 1: Base hit rate
-  BA vs pitcher hand (current 2026, blended if < 100 PA)
-  If early season: blended BA = (PA/100 × 2026 BA) + ((100-PA)/100 × 2025 BA)
+STEP 1: Base hit rate (always use handedness split)
+  Pull batter BA vs pitcher hand (LHP or RHP):
+    Current 2026: BA vs hand
+    If early season (< 100 PA): blended BA = (PA/100 × 2026 BA vs hand) + ((100-PA)/100 × 2025 BA vs hand)
+  This is your starting hit rate — never use overall BA if split is available
 
-STEP 2: Adjust for pitcher quality
-  Pitcher K rate vs this batter's hand:
-    If pitcher K% vs hand > 28%: hit rate × 0.88
-    If pitcher K% vs hand 23-27%: hit rate × 0.94
-    If pitcher K% vs hand < 20%: hit rate × 1.04
-  Pitcher BABIP allowed vs hand (use if available)
+STEP 2: Adjust for pitcher quality (use pitcher splits vs batter hand)
+  Pitcher K% vs batter hand:
+    If K% vs hand > 28%: hit rate × 0.88
+    If K% vs hand 23-27%: hit rate × 0.94
+    If K% vs hand < 20%: hit rate × 1.04
+  Pitcher BABIP allowed vs batter hand (use if available from Savant)
+  Pitcher Hard Hit % allowed vs batter hand: if > 40% allowed → slight hit rate bump
+
+  Career matchup adjustment (batter vs this specific pitcher):
+    If 20+ career PA vs pitcher:
+      Career BA vs pitcher carries 25% weight
+      Final BA = (0.75 × split-adjusted BA) + (0.25 × career BA vs pitcher)
+    If 10-19 career PA: note as reference only, no weight adjustment
+    If < 10 PA: ignore, use splits only
 
 STEP 3: Estimate plate appearances
   Batting order position → PA estimate:
