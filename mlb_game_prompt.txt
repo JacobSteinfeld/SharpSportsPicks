@@ -170,7 +170,8 @@ For each team offense pull from Fangraphs:
   - Team K%, BB%
   - Team ISO (isolated power)
   - Team BABIP
-  - Last 7 days: runs scored per game, wRC+
+  - Last 7 days: runs scored per game, wRC+, Hard Hit %, Sweet Spot Rate, Avg Exit Velo
+  - Last 15 days: same (used as second confirmation window in Phase 6 Step 6)
 
   HANDEDNESS SPLITS (critical — always apply vs opposing pitcher hand):
   - Team wRC+ vs LHP and vs RHP
@@ -340,10 +341,36 @@ STEP 4: Apply park factor
 STEP 5: Apply weather adjustment (from Phase 1)
   Add weather run adjustment split across both teams
 
-STEP 6: Apply recent form weight (last 7 days)
-  If team wRC+ last 7 days diverges >15 pts from season avg:
-  Final Runs = (0.70 × Park Adjusted Runs) + (0.30 × 7-day adjusted)
-  Else: Final Runs = Park Adjusted Runs
+STEP 6: Apply recent form weight (7-day + 15-day gated by Statcast)
+
+  STATCAST CONFIRMATION GATE — run this before applying any recency weight:
+  Pull for the team over the same recent window:
+    - Avg Exit Velocity (7-day and 15-day)
+    - Sweet Spot Rate (7-day and 15-day)
+    - Hard Hit % (7-day and 15-day)
+  Statcast is confirmed if ≥ 2 of 3 metrics moved same direction as wRC+ divergence
+  If Statcast does NOT confirm → divergence is BABIP noise → do not apply recency weight
+
+  FORM WEIGHT LOGIC:
+  Case 1 — DOUBLE CONFIRMED (7-day AND 15-day both diverge same direction, Statcast confirms):
+    → Strong real trend: Final Runs = (0.55 × Park Adj Runs) + (0.45 × avg of 7d + 15d adjusted)
+    → Flag: 🔥 DOUBLE-CONFIRMED [HOT STREAK / SLUMP] — process metrics align
+
+  Case 2 — 15-DAY CONFIRMED (15-day diverges >15 wRC+ pts, Statcast confirms, 7-day may differ):
+    → Reliable signal: Final Runs = (0.70 × Park Adj Runs) + (0.30 × 15-day adjusted)
+    → Flag: ✅ CONFIRMED [HOT STREAK / SLUMP] — 15-day window + Statcast aligned
+
+  Case 3 — 7-DAY ONLY (7-day diverges >15 wRC+ pts, Statcast confirms, 15-day is stable):
+    → Possible early signal, not yet confirmed: Final Runs = (0.85 × Park Adj Runs) + (0.15 × 7-day adjusted)
+    → Flag: ⚠️ EARLY SIGNAL — 7-day trend, monitor for 15-day confirmation
+
+  Case 4 — DIVERGENCE WITHOUT STATCAST CONFIRMATION:
+    → Box score noise: Final Runs = Park Adj Runs (no recency adjustment)
+    → Flag: 🔄 BOX SCORE NOISE — wRC+ divergence not confirmed by Statcast
+    → Note: "Public narrative is [hot/cold]. Process metrics disagree. Model holds season baseline."
+
+  Case 5 — NO DIVERGENCE (both windows within 15 wRC+ pts of season avg):
+    → Final Runs = Park Adj Runs
 
 Show all steps for both teams.
 

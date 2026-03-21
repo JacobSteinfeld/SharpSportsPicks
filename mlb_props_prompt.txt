@@ -263,11 +263,14 @@ For each batter prop, pull from Fangraphs:
     - Sprint speed (affects infield hits / SB props)
     - Pull % (affects HR projection vs park RF/LF)
 
-  Rolling stats from Fangraphs:
-    - Last 7 days: BA, wRC+, HR, SLG (hot/cold streak flag)
-    - Last 14 days: same
-    - Last 30 days: same
-    → If 7-day BA diverges >50 pts from vs-hand split: apply 30% weight to recent form
+  Rolling stats from Fangraphs + Baseball Savant:
+    Last 7 days:
+      - BA, wRC+, HR, SLG
+      - Avg Exit Velocity, Sweet Spot Rate, Hard Hit % (Statcast)
+    Last 15 days:
+      - BA, wRC+, HR, SLG
+      - Avg Exit Velocity, Sweet Spot Rate, Hard Hit % (Statcast)
+    → Pull both windows. Statcast is the confirmation gate — see form weight logic in hits Step 6.
 
 ── HITS PROJECTION ───────────────────────────────────────────
 
@@ -323,10 +326,38 @@ STEP 5: Apply park and weather adjustments
   Wind out: +0.03-0.05 (slightly more hard contact)
   Wind in: -0.03-0.05
 
-STEP 6: 7-day form weight
-  If last 7-day BA diverges > 50 pts from season avg:
-    Final = (0.70 × projected) + (0.30 × 7-day adjusted)
-  Else: Final = projected
+STEP 6: Apply recent form weight (7-day + 15-day gated by Statcast)
+
+  STATCAST CONFIRMATION GATE — run before applying any recency weight:
+  Check batter's Statcast over same window (7-day and 15-day):
+    - Avg Exit Velocity: moved same direction as BA divergence?
+    - Sweet Spot Rate: moved same direction?
+    - Hard Hit %: moved same direction?
+  Statcast confirmed if ≥ 2 of 3 metrics moved same direction as BA divergence.
+  If Statcast does NOT confirm → divergence is BABIP luck/unluck → do NOT apply recency weight.
+
+  FORM WEIGHT LOGIC:
+  Case 1 — DOUBLE CONFIRMED (7-day AND 15-day BA both diverge >50 pts, Statcast confirms):
+    → Real trend, two windows agree: Final = (0.55 × projected) + (0.45 × avg of 7d + 15d adjusted)
+    → Flag: 🔥 DOUBLE-CONFIRMED [HOT STREAK / SLUMP] — Statcast aligned, real signal
+
+  Case 2 — 15-DAY CONFIRMED (15-day BA diverges >50 pts, Statcast confirms, 7-day may differ):
+    → Reliable signal: Final = (0.70 × projected) + (0.30 × 15-day adjusted)
+    → Flag: ✅ CONFIRMED [HOT STREAK / SLUMP] — 15-day + Statcast aligned
+
+  Case 3 — 7-DAY ONLY (7-day diverges >50 pts, Statcast confirms, 15-day is within 30 pts):
+    → Possible early break, not confirmed: Final = (0.85 × projected) + (0.15 × 7-day adjusted)
+    → Flag: ⚠️ EARLY SIGNAL — 7-day trend only, 15-day not yet confirming
+
+  Case 4 — DIVERGENCE WITHOUT STATCAST CONFIRMATION:
+    → Box score noise: Final = projected (no recency adjustment)
+    → Flag: 🔄 BOX SCORE NOISE — BA divergence not confirmed by Statcast
+    → This is the buy-the-dip / fade-the-streak opportunity:
+        If batter is in public slump but Statcast is fine → over line may be deflated → edge
+        If batter is on public hot streak but Statcast is flat → over line may be inflated → edge
+
+  Case 5 — NO DIVERGENCE (both windows within 30 pts of vs-hand BA):
+    → Final = projected (season splits as-is)
 
 STEP 7: Compare to line
   PrizePicks line: 0.5 hits (most common) or 1.5 hits
@@ -373,7 +404,12 @@ STEP 5: Apply weather
   Wind 15+ mph out: +0.15-0.25 TB
   Wind 15+ mph in: -0.15-0.25 TB
 
-STEP 6: Compare to line
+STEP 6: Apply recent form weight (same Statcast-gated logic as hits Step 6)
+  Use SLG divergence instead of BA divergence as the trigger (>75 pts SLG = meaningful)
+  Apply same Case 1-5 framework using 7-day and 15-day SLG + Statcast confirmation
+  Note: Sweet Spot Rate is the most important Statcast gate for TB (directly predicts XBH)
+
+STEP 7: Compare to line
   PrizePicks TB line: typically 1.5 TB
   Edge threshold: ≥ 0.20 TB
 
@@ -467,6 +503,16 @@ Stack plays (note if multiple props from same game align):
   If pitcher has high K projection AND opposing team has low hit projections = STACK
   If weather is strongly out AND batter has high TB/HR projection = STACK
 
+Buy-the-dip flags (highest value plays — fade public narrative):
+  🔄 BOX SCORE NOISE + over line deflated = BUY THE DIP
+    → Batter in visible slump, Statcast stable, line dropped below model projection
+    → Public is fading based on box score; model holds season process data
+    → Flag as: BUY THE DIP — fade the slump narrative
+  🔄 BOX SCORE NOISE + over line inflated = FADE THE STREAK
+    → Batter on visible hot streak, Statcast flat, line moved up above model projection
+    → Public is tailing the streak; model sees BABIP luck, not real improvement
+    → Flag as: FADE THE STREAK — narrative already priced in
+
 ════════════════════════════════════════════════════════════════
 PHASE 5 — PICK OUTPUT (props format)
 ════════════════════════════════════════════════════════════════
@@ -540,6 +586,10 @@ Hook bank (props-specific, rotate — never repeat same day):
   "Exit velocity tells you how hard he hits it. The barrel rate tells you how often. The model adds them up."
   "The book used ERA. The model used whiff rate. Different number."
   "BABIP regression incoming. The model noticed. Vegas did not."
+  "He is one for twelve. His exit velocity has not moved. The slump is noise. The model is buying."
+  "The public is fading the slump. The robot checked the Statcast data. Different conclusion."
+  "Hot streak. Line moved up. Exit velocity did not move. The robot is fading the narrative."
+  "Seven days of bad box scores. Sweet Spot Rate unchanged. The model sees a buy-the-dip."
 
 Close rotation (same as game model — rotate):
   "SharpSportsPicks AI. Subscribe if you enjoy robots doing your homework."
