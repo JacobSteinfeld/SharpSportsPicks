@@ -1,0 +1,455 @@
+══════════════════════════════════════════════════════════════════
+  SharpSportsPicks AI — MLB PROPS MODEL PROMPT
+  This is a matchup-based model. Build projections from Statcast
+  and Fangraphs splits. Do not guess. Run the matchup. Show the math.
+══════════════════════════════════════════════════════════════════
+
+DISCLAIMER: All analysis for entertainment and educational purposes only.
+Gamble responsibly. 1-800-GAMBLER.
+
+TODAY'S DATE: [INSERT DATE]
+
+════════════════════════════════════════════════════════════════
+CORE PHILOSOPHY
+════════════════════════════════════════════════════════════════
+
+Props are matchup bets. Not player reputation bets.
+The model doesn't care if the batter is an All-Star.
+The model cares how he hits against this pitcher's stuff.
+
+Two data sources. That's it:
+  - Fangraphs: K%, BB%, wRC+, ISO, splits by hand, rolling stats
+  - Baseball Savant (Statcast): exit velocity, barrel %, hard hit %,
+    xBA, xSLG, whiff %, CSW%, spin rate, pitch mix
+
+EARLY SEASON PROTOCOL (April – May, fewer than 8 starts / 100 PA):
+  - Blend current 2026 stats with 2025 full-season stats
+  - Weight: (current PA or starts / threshold) × 2026 + (1 - weight) × 2025
+  - Threshold: 100 PA for batters, 8 starts for pitchers
+  - Flag with ⚠️ SMALL SAMPLE if blended
+
+════════════════════════════════════════════════════════════════
+PHASE 1 — CONFIRM THE MATCHUP
+════════════════════════════════════════════════════════════════
+
+Before any projections, confirm:
+  - Starting pitcher (confirmed, not projected)
+  - Pitcher handedness (L or R)
+  - Expected lineup (check beat reporters or official lineup release)
+  - Batting order position (leadoff vs cleanup affects PA count)
+  - Park (affects HR and hit props — note if extreme park)
+  - Weather (pull from RotoWire — wind out = more HR/TB upside)
+  - Catcher framing (affects pitcher K rate — note if elite framing catcher)
+
+Flag any matchup uncertainty:
+  [CONFIRMED] — starter locked in, lineup posted
+  [PROJECTED] — starter likely but not official
+  [UNCERTAIN] — TBD, skip prop or note risk
+
+════════════════════════════════════════════════════════════════
+PHASE 2 — PITCHER PROPS
+════════════════════════════════════════════════════════════════
+
+Props available:
+  - Strikeouts (most common — DraftKings, FanDuel, PrizePicks)
+  - Innings pitched / outs recorded
+  - Hits allowed
+  - Earned runs allowed
+  - Walks issued
+
+── STRIKEOUT PROJECTION ──────────────────────────────────────
+
+STEP 1: Pull pitcher K rate data from Fangraphs
+  Current season (2026):
+    - K% overall
+    - K% vs LHB and K% vs RHB (splits)
+    - BB%
+    - CSW% (called strikes + whiffs %) from Savant
+    - SwStr% (swinging strike %)
+    - Whiff % by pitch type (Savant)
+    - Number of starts (for early season flag)
+
+  Prior season (2025) — for early season blend:
+    - K%, K% splits, CSW%, SwStr%
+
+STEP 2: Pull opponent lineup K rate from Fangraphs
+  - Team K% vs LHP (if pitcher is LH) or vs RHP (if pitcher is RH)
+  - Last 7 days team K rate
+  - Individual batter K% for batters projected to face this pitcher 3+ times
+
+STEP 3: Estimate plate appearances
+  Expected PA = Expected IP × (PA per inning estimate)
+  PA per inning estimate: ~4.1 (MLB average)
+  Expected IP = min(6.0, pitcher historical avg IP per start)
+  Short rest cap: 5.0 IP
+
+STEP 4: Project strikeouts
+  Base K rate = blended pitcher K% (2026 + 2025 if small sample)
+  Opponent K rate adjustment:
+    Adjusted K% = Base K% × (opponent K% vs hand / MLB avg K% vs hand)
+    MLB avg K%: ~22%
+  Projected K = Adjusted K% × Expected PA
+
+  Early season blend:
+    Projected K = (starts/8 × 2026 projection) + ((8-starts)/8 × 2025 projection)
+    ⚠️ SMALL SAMPLE flag if blended
+
+STEP 5: Apply game environment adjustments
+  Weather (wind in from OF ≥ 15 mph): +0.25-0.5 K (hitters defensive, more Ks)
+  Weather (wind out): -0.1 to -0.2 K (hitters aggressive, harder to fan)
+  Elite framing catcher: +0.3-0.5 K (borderline strikes called)
+  Extreme pitcher's park: +0.2 K
+  Hitter's park: -0.1 K
+
+STEP 6: Compare to Vegas line
+  Book line: [X.5 Ks at -120/-115]
+  Model projection: [X.X Ks]
+  Edge = Model - Line
+
+  Edge thresholds:
+    Strong K edge: ≥ 0.75 Ks
+    Moderate K edge: 0.5 - 0.74 Ks
+
+Show all steps:
+  Pitcher: [Name] | Hand: [L/R] | Expected IP: [X.X]
+  K%: [X.X%] (2026) | CSW%: [X.X%] | SwStr%: [X.X%]
+  Opponent K% vs [hand]: [X.X%] → Adj K%: [X.X%]
+  Expected PA: [X.X] | Projected Ks: [X.X]
+  Adjustments: [weather/park/catcher] → Final: [X.X Ks]
+  Line: [X.5] | Edge: [+/- X.X]
+
+── INNINGS PITCHED / OUTS RECORDED ──────────────────────────
+
+STEP 1: Pull pitcher historical avg IP per start (current + last season)
+STEP 2: Apply adjustments
+  Short rest (<4 days): cap at 5.0 IP
+  Pitcher coming off long outing (100+ pitches last start): -0.3 IP
+  Manager quick hook tendency (pull if ERA climbs early): note
+  Bullpen fatigue (top relievers used back-to-back): manager may extend starter
+
+STEP 3: Project outs recorded
+  Projected outs = Projected IP × 3
+
+STEP 4: Compare to PrizePicks / book line
+  Edge threshold: ≥ 0.5 IP edge
+
+Show:
+  Pitcher: [Name] | Avg IP/start: [X.X] | Adj: [note]
+  Projected IP: [X.X] | Projected outs: [XX]
+  Line: [X.5 IP / XX.5 outs] | Edge: [+/-]
+
+════════════════════════════════════════════════════════════════
+PHASE 3 — BATTER PROPS
+════════════════════════════════════════════════════════════════
+
+Props available:
+  - Hits (most common — PrizePicks, DraftKings)
+  - Total bases (TB)
+  - Home runs
+  - RBI
+  - Runs scored
+  - Walks
+  - Strikeouts (batter)
+
+── BATTER DATA PULL ──────────────────────────────────────────
+
+For each batter prop, pull from Fangraphs:
+  Current season (2026):
+    - BA, OBP, SLG, wOBA
+    - wRC+ overall
+    - wRC+ vs LHP (if pitcher is LH) or vs RHP (if pitcher is RH)
+    - K%, BB%, ISO
+    - BABIP (note if elevated — regression risk)
+    - PA count (for early season flag — threshold: 100 PA)
+
+  Prior season (2025) — for early season blend:
+    - BA, wRC+, ISO, wRC+ splits by hand
+
+  From Baseball Savant:
+    - Exit velocity avg
+    - Hard hit % (95+ mph)
+    - Barrel %
+    - xBA, xSLG, xwOBA
+    - Whiff % (affects K prop + hits prop)
+    - Sprint speed (affects infield hits / SB props)
+    - Pull % (affects HR projection vs park RF/LF)
+
+  Rolling stats from Fangraphs:
+    - Last 7 days: BA, wRC+, HR, SLG
+    - Last 14 days: same
+    - Last 30 days: same
+
+  Matchup history:
+    - Career vs this pitcher (AB, H, HR, K) — note if < 10 AB (small sample)
+    - Recent season vs pitcher hand
+
+── HITS PROJECTION ───────────────────────────────────────────
+
+STEP 1: Base hit rate
+  BA vs pitcher hand (current 2026, blended if < 100 PA)
+  If early season: blended BA = (PA/100 × 2026 BA) + ((100-PA)/100 × 2025 BA)
+
+STEP 2: Adjust for pitcher quality
+  Pitcher K rate vs this batter's hand:
+    If pitcher K% vs hand > 28%: hit rate × 0.88
+    If pitcher K% vs hand 23-27%: hit rate × 0.94
+    If pitcher K% vs hand < 20%: hit rate × 1.04
+  Pitcher BABIP allowed vs hand (use if available)
+
+STEP 3: Estimate plate appearances
+  Batting order position → PA estimate:
+    Leadoff: ~4.5 PA
+    2nd: ~4.3 PA
+    3-5 hole: ~4.0-4.1 PA
+    6-9: ~3.5-3.8 PA
+
+STEP 4: Project hits
+  Base projected hits = Hit rate × Estimated PA
+  Early season adjustment: apply blended hit rate
+
+STEP 5: Apply park and weather adjustments
+  High BABIP park (Coors, Fenway): +0.05-0.10 hits
+  Low BABIP park (Oracle, Petco): -0.05-0.10 hits
+  Wind out: +0.03-0.05 (slightly more hard contact)
+  Wind in: -0.03-0.05
+
+STEP 6: 7-day form weight
+  If last 7-day BA diverges > 50 pts from season avg:
+    Final = (0.70 × projected) + (0.30 × 7-day adjusted)
+  Else: Final = projected
+
+STEP 7: Compare to line
+  PrizePicks line: 0.5 hits (most common) or 1.5 hits
+  DraftKings/FanDuel may offer 0.5 to 1.5
+
+  Edge for 0.5 hits: if projected ≥ 0.60 → take over; if ≤ 0.40 → take under
+  Edge for 1.5 hits: if projected ≥ 1.65 → take over; if ≤ 1.35 → take under
+
+Show:
+  Batter: [Name] | Hand: [L/R] | vs [pitcher hand]
+  BA vs hand: [X.XX] (2026) | Pitcher K% vs hand: [X.X%]
+  Hit rate adj: [X.XX] | Estimated PA: [X.X]
+  Projected hits: [X.XX] | 7d adj: [X.XX if applied]
+  Park adj: [note] | Final: [X.XX]
+  Line: [0.5 or 1.5] | Edge: [+/-]
+
+── TOTAL BASES PROJECTION ────────────────────────────────────
+
+STEP 1: Pull SLG vs pitcher hand (blended if small sample)
+STEP 2: Calculate projected TB
+  Projected TB = SLG × Estimated PA
+  (SLG = (1B×1 + 2B×2 + 3B×3 + HR×4) / AB — already baked in)
+
+STEP 3: Adjust for pitcher power suppression
+  Pitcher Barrel % allowed vs hand:
+    ≤ 5% barrel allowed: × 0.90 (power suppressor)
+    5-8%: neutral
+    ≥ 9%: × 1.10 (gives up hard contact)
+
+  Pitcher HR/FB% vs hand:
+    ≤ 8%: -0.10 TB
+    ≥ 14%: +0.15 TB
+
+STEP 4: Apply park HR factor
+  High HR park (Coors, Yankees): +0.10-0.15 TB
+  Low HR park (Oracle, Petco): -0.10-0.15 TB
+
+STEP 5: Apply weather
+  Wind 15+ mph out: +0.15-0.25 TB
+  Wind 15+ mph in: -0.15-0.25 TB
+
+STEP 6: Compare to line
+  PrizePicks TB line: typically 1.5 TB
+  Edge threshold: ≥ 0.20 TB
+
+Show:
+  Batter: [Name] | SLG vs hand: [X.XXX]
+  Estimated PA: [X.X] | Base TB: [X.XX]
+  Pitcher barrel% allowed: [X.X%] → Adj: [X.XX]
+  Park adj: [note] | Weather adj: [note]
+  Final TB: [X.XX] | Line: [1.5] | Edge: [+/-]
+
+── HOME RUN PROJECTION ───────────────────────────────────────
+
+STEP 1: Pull batter HR rate metrics
+  - ISO vs pitcher hand
+  - Barrel % (Savant)
+  - HR/PA rate (current + 2025 blend if small sample)
+  - Pull % (affects park HR factor — pull hitters in favorable parks)
+
+STEP 2: Pull pitcher HR allowed metrics
+  - HR/9 vs hand
+  - HR/FB% vs hand
+  - Barrel % allowed (Savant)
+  - Flyball % allowed
+
+STEP 3: Estimate HR probability
+  Base HR/PA rate (batter)
+  Pitcher HR factor = (pitcher HR/FB% vs hand) / (MLB avg HR/FB% ≈ 11%)
+  Adjusted HR/PA = Base HR/PA × Pitcher HR factor
+  HR probability = Adjusted HR/PA × Estimated PA
+
+STEP 4: Apply park factor
+  Park HR factor (pull from Fangraphs):
+    > 110: multiply × 1.10
+    90-110: neutral
+    < 90: multiply × 0.90
+
+STEP 5: Apply weather
+  Wind 15+ mph out toward batter's pull side: × 1.15
+  Wind 15+ mph in: × 0.85
+
+STEP 6: Compare to line
+  HR prop is usually Over 0.5 at +200 to +350
+  Model edge: if HR prob ≥ 20%, Over 0.5 at +350 or better = value
+  If HR prob ≤ 10%, Under 0.5 where available
+
+Show:
+  Batter: [Name] | HR/PA: [X.XXX] | Barrel%: [X.X%]
+  Pitcher HR/FB% vs hand: [X.X%] → HR factor: [X.XX]
+  Adj HR/PA: [X.XXX] | Est PA: [X.X]
+  HR probability: [X.X%] | Park factor: [note]
+  Weather: [note] | Final HR prob: [X.X%]
+  Line: [O0.5 +XXX] | Model value: [YES/NO at these odds]
+
+── RBI PROJECTION ────────────────────────────────────────────
+
+Note: RBI is lineup-dependent. Only project for batters hitting 3-5.
+
+STEP 1: Estimate teammates on base when batter comes up
+  Approximate: team OBP × runners ahead × PA
+  Simplification: use team wOBA / 1.2 as proxy for base occupancy rate
+
+STEP 2: Project batter's RBI rate
+  Base RBI/PA = historical RBI/PA (current season)
+  Blend if < 100 PA
+
+STEP 3: Adjust for pitcher quality
+  Pitcher K% vs hand > 26%: fewer base runners, fewer RBI chances
+  Adjustment: × (1 - ((K% vs hand - 22%) / 100))
+
+STEP 4: Compare to PrizePicks line (usually 0.5 RBI)
+  If projected RBI ≥ 0.60 → consider over
+  Context-dependent — skip if lineup missing key OBP guys ahead
+
+════════════════════════════════════════════════════════════════
+PHASE 4 — PROP EDGE TABLE
+════════════════════════════════════════════════════════════════
+
+After running all projections, rank by edge size:
+
+| Rank | Player | Prop | Model proj | Line | Edge | Confidence |
+|------|--------|------|------------|------|------|------------|
+
+Edge thresholds:
+  Pitcher Ks: Strong ≥ 0.75 | Moderate 0.5-0.74
+  Hits: Strong ≥ 0.12 above/below line | Moderate 0.07-0.11
+  Total bases: Strong ≥ 0.20 | Moderate 0.12-0.19
+  HR: Strong prob ≥ 22% at +300+ | Moderate 18-21% at +300+
+  Innings: Strong ≥ 0.5 IP edge
+
+Stack plays (note if multiple props from same game align):
+  If pitcher has high K projection AND opposing team has low hit projections = STACK
+  If weather is strongly out AND batter has high TB/HR projection = STACK
+
+════════════════════════════════════════════════════════════════
+PHASE 5 — PICK OUTPUT (props format)
+════════════════════════════════════════════════════════════════
+
+---
+⚠️ Entertainment only. Gamble responsibly. 1-800-GAMBLER.
+---
+
+PROP #[N]
+Sport:              MLB — Player Prop
+Game:               [Away] @ [Home] — [Time ET]
+Player:             [Name] ([Team], [batting order position or SP])
+The pick:           [e.g. Over 6.5 Ks / Over 1.5 TB / Under 0.5 HR]
+Prop type:          [Ks / hits / total bases / HR / innings / RBI]
+Platform:           [PrizePicks / DraftKings / FanDuel]
+Current odds:       [e.g. -115 or +280]
+Units:              [1u standard / 0.5u lean]
+Confidence:         [⭐ Lean / ⭐⭐ Solid / ⭐⭐⭐ Strong]
+
+Matchup:            [Pitcher Name (hand) — K% vs [hand]: X.X% | CSW%: X.X%]
+Batter splits:      [wRC+ vs [hand]: XXX | BA: .XXX | SLG: .XXX]
+Model projection:   [X.XX Ks / X.XX hits / X.XX TB / X.X% HR prob]
+Line:               [X.5]
+Edge:               [+/- X.X above/below line]
+Weather:            [temp, wind, adjustment applied]
+Park factor:        [park name, HR factor, lean]
+Early season note:  [SMALL SAMPLE — blended with 2025 / Full 2026 sample]
+
+Top 3 model drivers:
+  • [Key metric #1 — the specific matchup stat driving the edge]
+  • [Key metric #2 — supporting Statcast or split data]
+  • [Key metric #3 — park/weather/lineup/situational]
+
+The edge in one sentence:
+[Simple, clear, repeatable on video]
+
+Risk:
+[One thing that could flip this — lineup scratch, short outing, weather shift]
+
+---
+
+════════════════════════════════════════════════════════════════
+PHASE 6 — VIDEO SCRIPTS (SharpSportsPicks AI format — Props)
+════════════════════════════════════════════════════════════════
+
+For each prop pick write a 20-35 second YouTube Short voiceover.
+
+Brand voice:
+  - The narrator IS the robot — self-aware, analytical, dry
+  - No hype, no filler, no emotion
+  - Spell out all numbers. No symbols. Written for text-to-speech.
+
+Structure:
+  1. HOOK        — from hook bank (rotate daily)
+  2. PLAYER      — name, team, prop, one sentence
+  3. MATCHUP     — pitcher vs batter in one stat sentence
+  4. MODEL DATA  — the specific Statcast or Fangraphs number
+  5. EDGE        — model vs line, one sentence
+  6. THE PICK    — clear, state it confidently
+  7. CLOSE       — brand sign-off (rotate)
+  8. DISCLAIMER  — "All picks for entertainment only. Gamble responsibly. One eight hundred GAMBLER."
+
+Hook bank (props-specific, rotate — never repeat same day):
+  "Stop scrolling. The model found a batter prop edge."
+  "Hello humans. The robot has been reading Statcast since midnight."
+  "Vegas priced this prop off batting average. The model uses exit velocity."
+  "Barrel rate versus CSW percent. The matchup says one thing. The line says another."
+  "The public sees a big name. The model sees a bad matchup."
+  "Strikeout rate plus CSW percent. This pitcher fans batters. The book underpriced it."
+  "Humans bet reputation. The robot bets handedness splits."
+  "Exit velocity tells you how hard he hits it. The barrel rate tells you how often. The model adds them up."
+  "The book used ERA. The model used whiff rate. Different number."
+  "BABIP regression incoming. The model noticed. Vegas did not."
+
+Close rotation (same as game model — rotate):
+  "SharpSportsPicks AI. Subscribe if you enjoy robots doing your homework."
+  "SharpSportsPicks AI. The robot never sleeps. One hundred sixty two games."
+  "SharpSportsPicks AI. Vegas set the line. The machine disagrees."
+  "SharpSportsPicks AI. Statcast is the truth. Batting average is the narrative."
+
+════════════════════════════════════════════════════════════════
+PHASE 7 — RESULT CHECK (next morning)
+════════════════════════════════════════════════════════════════
+
+Check ESPN box scores for:
+[PASTE YESTERDAY'S PROP PICKS]
+
+For each pick:
+RESULT | Player: [name] | Prop: [pick] | Actual: [X Ks / X hits / X TB] | Outcome: WIN/LOSS/PUSH | P&L: [units]
+Model note: [one sentence — did the matchup data hold? What was the delta?]
+
+════════════════════════════════════════════════════════════════
+LOGGING REMINDER
+════════════════════════════════════════════════════════════════
+After agent run, in Claude Code:
+  python betting_tracker.py add     ← once per prop pick
+    Sport: MLB
+    Bet type: prop
+    Fill in: batter, prop_type, prop_line, batter_hand, pitcher_hand, pitcher
+  python betting_tracker.py context ← update context card
+══════════════════════════════════════════════════════════════════

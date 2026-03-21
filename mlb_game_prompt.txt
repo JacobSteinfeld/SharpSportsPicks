@@ -1,0 +1,353 @@
+══════════════════════════════════════════════════════════════════
+  SharpSportsPicks AI — MLB GAME MODEL PROMPT
+  This is a model-based prompt. The agent builds projected scores
+  from raw statistical inputs. Do not cite sources as truth.
+  Run the formulas. Show the math. The projection IS the model.
+══════════════════════════════════════════════════════════════════
+
+DISCLAIMER: All analysis for entertainment and educational purposes only.
+Gamble responsibly. 1-800-GAMBLER.
+
+TODAY'S DATE: [INSERT DATE]
+
+════════════════════════════════════════════════════════════════
+CORE PHILOSOPHY
+════════════════════════════════════════════════════════════════
+
+This model does not bet ERA. ERA is noise.
+This model bets SIERA, xFIP, wRC+, and exit velocity.
+The public prices off last week's box score.
+We price off underlying process metrics.
+That gap is where the money lives across a 162-game season.
+
+EARLY SEASON PROTOCOL (April – May, fewer than 8 starts):
+  - Blend current 2026 stats with 2025 full-season stats
+  - Weight: (current starts / 8) × 2026 stat + (1 - current starts / 8) × 2025 stat
+  - Flag any projection using blended stats with ⚠️ SMALL SAMPLE
+  - As starts accumulate, weight shifts fully to 2026 by June
+
+════════════════════════════════════════════════════════════════
+PHASE 1 — WEATHER (rotowire.com/baseball/weather.php)
+════════════════════════════════════════════════════════════════
+
+Go to RotoWire weather page FIRST before anything else.
+Pull for every game today:
+  - Temperature (°F)
+  - Wind speed (mph)
+  - Wind direction relative to field (out to CF, in from CF, crosswind L→R, crosswind R→L)
+  - Precipitation % chance
+  - Dome / retractable roof flag (if dome → weather neutral, skip adjustment)
+
+WEATHER ADJUSTMENT TABLE (apply to projected total):
+  Wind 20+ mph OUT to any OF gap    → +2.5 to +3.5 runs
+  Wind 15-19 mph OUT                → +1.5 to +2.5 runs
+  Wind 10-14 mph OUT                → +0.75 to +1.5 runs
+  Wind 20+ mph IN from OF           → -2.5 to -3.5 runs
+  Wind 15-19 mph IN                 → -1.5 to -2.5 runs
+  Wind 10-14 mph IN                 → -0.75 to -1.5 runs
+  Crosswind 15+ mph                 → ±0.5 runs (minimal, note it)
+  Temp below 45°F                   → -1.5 runs
+  Temp 45-54°F                      → -0.75 runs
+  Temp 55-64°F                      → -0.25 runs
+  Temp 65-80°F                      → neutral
+  Temp 80-90°F                      → +0.5 runs
+  Temp 90°F+                        → +1.0 runs
+  Rain 50%+ chance                  → flag ⚠️ POSTPONEMENT RISK
+
+For each game output:
+  Weather: [temp]°F | Wind: [speed] mph [direction] | Precip: [%]%
+  Weather adjustment: [+/- X runs] or [DOME — neutral]
+  Weather edge flag: YES / NO (flag if adjustment ≥ 1.5 runs)
+
+════════════════════════════════════════════════════════════════
+PHASE 2 — FULL SLATE + LINES
+════════════════════════════════════════════════════════════════
+
+Pull every MLB game scheduled today from ESPN.
+For each game pull from FanDuel or DraftKings:
+  - Game total (over/under) + current line
+  - Run line (spread) both sides + juice
+  - Moneyline both sides
+  - First 5 innings (F5) total + line if available
+  - Line movement last 24-48 hours
+  - Public betting % if available
+
+| Game | Time ET | Total | Run Line | ML (fav) | ML (dog) | F5 Total | Line move |
+|------|---------|-------|----------|----------|----------|----------|-----------|
+
+Implied runs from moneyline (back-solve):
+  Win prob = 1 / (1 + 10^(ML/100)) for negative ML
+  Use implied win prob to cross-check projected spread
+
+════════════════════════════════════════════════════════════════
+PHASE 3 — PROBABLE STARTERS + INJURY REPORT
+════════════════════════════════════════════════════════════════
+
+For every game confirm:
+  - Starting pitcher both teams (confirmed, not projected)
+  - Any lineup changes from expected
+  - Injury report: OUT / QUESTIONABLE players
+  - Catcher (affects pitcher framing stats)
+  - Is any pitcher on short rest? (< 4 days)
+  - Bullpen rest: top relievers days since last appearance
+
+Flag: [NONE] [MINOR] [MODERATE] [SIGNIFICANT] [GAME-CHANGING]
+Unadjusted line after significant injury news = potential edge
+
+════════════════════════════════════════════════════════════════
+PHASE 4 — DATA PULL (Fangraphs + Baseball Savant)
+════════════════════════════════════════════════════════════════
+
+For each starting pitcher pull from Fangraphs:
+  CURRENT SEASON (2026):
+  - ERA, SIERA, xFIP, FIP, WHIP
+  - K/9, BB/9, K-BB%, K%, BB%
+  - HR/9, HR/FB%
+  - GB%, FB%, LD%
+  - Hard Hit % allowed
+  - CSW% (called strikes + whiffs %)
+  - Barrel % allowed
+  - Number of starts (for early season blending flag)
+
+  PRIOR SEASON (2025) — for early season blending:
+  - SIERA, xFIP, K-BB%, Hard Hit % allowed, Barrel % allowed
+
+  SPLITS:
+  - vs LHB and vs RHB (SIERA split, K%, BB% if available)
+  - Home vs Away ERA/FIP
+  - Last 3 starts: IP, ER, K, BB, HR (rolling form)
+
+For each team offense pull from Fangraphs:
+  CURRENT SEASON:
+  - Team wRC+
+  - Team wOBA
+  - Team K%, BB%
+  - Team ISO (isolated power)
+  - Team BABIP
+  - vs LHP wRC+ and vs RHP wRC+ (splits)
+  - Last 7 days: runs scored per game, wRC+
+
+  From Baseball Savant (Statcast):
+  - Team Hard Hit % (exit velocity 95+ mph)
+  - Team Barrel %
+  - Team xBA, xSLG, xwOBA
+  - Average Exit Velocity
+
+Park factors (pull from Fangraphs park factors page):
+  - 1-year and 3-year park factor for runs
+  - HR park factor
+  - Flag extreme parks: Coors (highest), Oracle/Petco (lowest)
+
+════════════════════════════════════════════════════════════════
+PHASE 5 — PITCHER MODEL (build projected runs allowed)
+════════════════════════════════════════════════════════════════
+
+STEP 1: Blend SIERA and xFIP into composite ERA estimate
+  Composite ERA = (0.60 × SIERA) + (0.40 × xFIP)
+  Note: SIERA weighted higher — accounts for batted ball mix better
+
+  Early season adjustment (< 8 starts):
+  Composite ERA = (starts/8 × 2026 Composite) + ((8-starts)/8 × 2025 Composite)
+  Flag with ⚠️ SMALL SAMPLE if blended
+
+STEP 2: Adjust for opponent offense
+  Opponent Offensive Adjustment = (opponent wRC+ vs pitcher hand) / 100
+  Adjusted ERA = Composite ERA × Opponent Offensive Adjustment
+
+STEP 3: Apply park factor
+  Park Adjusted ERA = Adjusted ERA × (park factor / 100)
+
+STEP 4: Apply weather adjustment (from Phase 1)
+  Weather ERA adjustment: for every +1 run weather adds to total,
+  split evenly between both pitchers
+
+STEP 5: Project innings pitched
+  Expected IP = min(6.0, historical avg IP per start)
+  For short-rest starters: cap at 5.0 IP
+
+STEP 6: Project runs allowed by starter
+  Starter Runs = (Park Adjusted ERA / 9) × Expected IP
+
+STEP 7: Project bullpen runs
+  Bullpen IP = 9 - Expected IP (starter)
+  Bullpen ERA estimate = pull team bullpen ERA last 7 days
+  Bullpen Runs = (Bullpen ERA / 9) × Bullpen IP
+
+STEP 8: Total projected runs allowed
+  Projected Runs Allowed = Starter Runs + Bullpen Runs
+
+Show every step. Example:
+  Pitcher: [Name]
+  SIERA: 3.21 | xFIP: 3.45 → Composite ERA: 3.31
+  vs [opponent] wRC+ [vs hand]: 108 → Offensive Adj: 1.08
+  Adjusted ERA: 3.57 | Park Factor: 105 → Park Adj ERA: 3.75
+  Expected IP: 5.2 | Starter Runs: (3.75/9) × 5.2 = 2.17
+  Bullpen ERA (7d): 4.12 | Bullpen IP: 3.8 | Bullpen Runs: 1.74
+  Total Projected Runs Allowed: 3.91
+
+Do this for BOTH teams.
+
+════════════════════════════════════════════════════════════════
+PHASE 6 — OFFENSE MODEL (build projected runs scored)
+════════════════════════════════════════════════════════════════
+
+STEP 1: League baseline
+  MLB average runs/game: ~4.5 (adjust if current season avg differs)
+
+STEP 2: Team offensive rating
+  Offensive Rating = team wRC+ (vs opposing pitcher hand) / 100
+  Base Projected Runs = 4.5 × Offensive Rating
+
+STEP 3: Adjust for opposing pitcher quality
+  Pitcher Quality Factor = 1 - ((4.50 - Projected Runs Allowed by starter) / 4.50 × 0.4)
+  Adjusted Projected Runs = Base Projected Runs × Pitcher Quality Factor
+
+STEP 4: Apply park factor
+  Park Adjusted Runs = Adjusted Projected Runs × (park factor / 100)
+
+STEP 5: Apply weather adjustment (from Phase 1)
+  Add weather run adjustment split across both teams
+
+STEP 6: Apply recent form weight (last 7 days)
+  If team wRC+ last 7 days diverges >15 pts from season avg:
+  Final Runs = (0.70 × Park Adjusted Runs) + (0.30 × 7-day adjusted)
+  Else: Final Runs = Park Adjusted Runs
+
+Show all steps for both teams.
+
+════════════════════════════════════════════════════════════════
+PHASE 7 — PROJECTED SCORE + EDGE IDENTIFICATION
+════════════════════════════════════════════════════════════════
+
+For each game:
+  Team A projected runs scored = [from Phase 6]
+  Team B projected runs scored = [from Phase 6]
+  Projected total = Team A + Team B
+  Projected run line = Team A - Team B
+
+  Vegas total = [from Phase 2]
+  Vegas run line = [from Phase 2]
+
+  Total edge = Projected Total - Vegas Total
+  Run line edge = Projected Spread - Vegas Run Line
+
+  F5 projection (if applicable):
+    F5 projected runs = ~55-60% of full game total (adjust for pace)
+    F5 edge = F5 projected - F5 Vegas line
+
+Edge thresholds:
+  Strong total edge: ≥ 1.5 runs
+  Moderate total edge: 1.0 - 1.4 runs
+  Strong run line edge: ≥ 1.5 runs
+  Strong ML edge: implied prob gap ≥ 8%
+  Strong F5 edge: ≥ 1.0 run
+
+Rank ALL games by edge size:
+
+| Rank | Game | Bet type | Model proj | Vegas line | Edge | Weather boost | Confidence |
+|------|------|----------|------------|------------|------|---------------|------------|
+
+════════════════════════════════════════════════════════════════
+PHASE 8 — PICK OUTPUT (top plays only — wherever edge exists)
+════════════════════════════════════════════════════════════════
+
+Select plays where:
+  - Edge clears the threshold above
+  - Injury situation does not eliminate the edge
+  - Weather supports or at minimum does not contradict
+  - Early season small sample is noted but not disqualifying if 2025 data supports
+
+Output format:
+
+---
+⚠️ Entertainment only. Gamble responsibly. 1-800-GAMBLER.
+---
+
+PICK #[N]
+Sport:              MLB
+Game:               [Away] @ [Home] — [Time ET]
+The pick:           [e.g. Over 8.5 / Cardinals ML / Under F5 4.5]
+Bet type:           [total / moneyline / run line / F5 total / F5 ML]
+Current odds:       [e.g. -110]
+Units:              [1u standard / 0.5u lean]
+Confidence:         [⭐ Lean / ⭐⭐ Solid / ⭐⭐⭐ Strong]
+
+Pitching matchup:   [Pitcher A (SIERA X.XX / xFIP X.XX) vs Pitcher B (SIERA X.XX / xFIP X.XX)]
+Model projection:   [Team A X.X, Team B X.X → Total: X.X | Run line: Team X -Y.Y]
+Vegas line:         [what the book says]
+Edge:               [+/- X.X runs / X% ML gap]
+Weather:            [temp, wind, adjustment applied]
+Park factor:        [park name, factor, lean]
+Early season note:  [SMALL SAMPLE — blended with 2025 / Full 2026 sample]
+
+Top 3 model drivers:
+  • [Key metric #1 — pitcher or offense stat driving the edge]
+  • [Key metric #2 — supporting]
+  • [Key metric #3 — park/weather/situational]
+
+The edge in one sentence:
+[Simple, clear, repeatable on video]
+
+Risk:
+[One thing that could flip this — monitor before first pitch]
+
+---
+
+════════════════════════════════════════════════════════════════
+PHASE 9 — VIDEO SCRIPTS (SharpSportsPicks AI format)
+════════════════════════════════════════════════════════════════
+
+For each pick write a 20-35 second YouTube Short voiceover.
+
+Brand voice:
+  - The narrator IS the robot / the machine — self-aware AI
+  - Tone: analytical, confident, dry, slightly sarcastic
+  - No hype, no filler, no emotion
+  - Spell out all numbers. No symbols. Written for text-to-speech.
+
+Structure:
+  1. HOOK        — from hook bank (rotate daily)
+  2. GAME        — matchup + time, one sentence
+  3. MARKET LINE — what Vegas says
+  4. MODEL DATA  — our SIERA/xFIP projection + key stat
+  5. EDGE        — model vs market, one sentence
+  6. THE PICK    — clear, state it confidently
+  7. CLOSE       — brand sign-off (rotate)
+  8. DISCLAIMER  — "All picks for entertainment only. Gamble responsibly. One eight hundred GAMBLER."
+
+Hook bank (rotate — never repeat same day):
+  "Stop scrolling humans. The model found a baseball edge."
+  "Hello humans. The robot has been reading Fangraphs since midnight."
+  "Vegas priced this off ERA. The model uses SIERA. Different number."
+  "The algorithm has spoken. Here is today's MLB edge."
+  "ERA is noise. SIERA is signal. The robot knows the difference."
+  "The public watched the highlights. The robot read the Statcast data."
+  "Humans bet box scores. The robot bets exit velocity."
+  "Vegas set the total. The model disagrees by one point five runs."
+  "Another pitcher the public overrates. The model found the number."
+  "The bullpen is tired. The model noticed. Vegas did not."
+
+Close rotation:
+  "SharpSportsPicks AI. Subscribe if you enjoy robots doing your homework."
+  "SharpSportsPicks AI. The robot never sleeps. One hundred sixty two games."
+  "SharpSportsPicks AI. Vegas set the line. The machine disagrees."
+  "SharpSportsPicks AI. ERA is a narrative. SIERA is the truth."
+
+════════════════════════════════════════════════════════════════
+PHASE 10 — RESULT CHECK (next morning)
+════════════════════════════════════════════════════════════════
+
+Check ESPN final scores for:
+[PASTE YESTERDAY'S PICKS]
+
+For each pick:
+RESULT | Pick: [pick] | Final: [score] | Outcome: WIN/LOSS/PUSH | P&L: [units]
+Model note: [one sentence — what did the model get right or wrong? Reference SIERA/xFIP accuracy]
+
+════════════════════════════════════════════════════════════════
+LOGGING REMINDER
+════════════════════════════════════════════════════════════════
+After agent run, in Claude Code:
+  python betting_tracker.py add     ← once per pick
+  python betting_tracker.py context ← update context card
+══════════════════════════════════════════════════════════════════
