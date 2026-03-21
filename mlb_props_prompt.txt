@@ -41,16 +41,172 @@ EARLY SEASON PROTOCOL (April – May, fewer than 8 starts / 100 PA):
   - Flag with ⚠️ SMALL SAMPLE if blended
 
 ════════════════════════════════════════════════════════════════
-PHASE 1 — CONFIRM THE MATCHUP
+PHASE 1 — WEATHER + PARK + MATCHUP SETUP
 ════════════════════════════════════════════════════════════════
 
-Before any projections, confirm:
+Run this phase first. Weather + park + matchup are the three pillars.
+When all three stack in the same direction → convergence multiplier applies.
+When they conflict → note the friction, reduce confidence.
+
+── STEP 1: WEATHER PULL (rotowire.com/baseball/weather.php) ──
+
+Pull for today's game:
+  - Temperature (°F)
+  - Wind speed (mph) and direction relative to field:
+      Out to CF / Out to LF / Out to RF / In from CF / Crosswind L→R / Crosswind R→L
+  - Precipitation % chance
+  - Dome or retractable roof? → If YES: mark DOME — skip all weather adjustments
+
+BATTER PROP WEATHER ADJUSTMENT TABLE:
+
+  TEMPERATURE (affects ball carry and bat speed):
+    Below 45°F  → HR × 0.80 | TB × 0.90 | Hits neutral
+    45–54°F     → HR × 0.87 | TB × 0.94 | Hits neutral
+    55–64°F     → HR × 0.93 | TB × 0.97 | Hits neutral
+    65–80°F     → neutral across all props
+    80–90°F     → HR × 1.05 | TB × 1.02 | Hits neutral
+    90°F+       → HR × 1.08 | TB × 1.04 | Hits neutral
+
+  WIND — OUT from OF (tiered by speed):
+    Pull-side direction note:
+      RH batter pulls to LF → wind out to LF/CF = full HR benefit
+      LH batter pulls to RF → wind out to RF/CF = full HR benefit
+      Wind out to opposite field = ~50% HR benefit, still good for TB
+    20+ mph OUT  → HR × 1.28 | TB × 1.18 | Hits × 1.05
+    15–19 mph OUT → HR × 1.18 | TB × 1.12 | Hits × 1.03
+    10–14 mph OUT → HR × 1.08 | TB × 1.06 | Hits × 1.01
+    Wind out to OPPOSITE field (non-pull side): reduce HR multiplier by 40%
+      e.g. RH batter, wind out to RF → HR × 1.05 not × 1.18 at 15-19 mph
+
+  WIND — IN from OF (tiered by speed):
+    20+ mph IN  → HR × 0.72 | TB × 0.82 | Hits × 0.97
+    15–19 mph IN → HR × 0.80 | TB × 0.88 | Hits × 0.98
+    10–14 mph IN → HR × 0.90 | TB × 0.94 | Hits neutral
+
+  CROSSWIND (15+ mph):
+    → Minimal HR effect (±5%) | Note but don't formula-adjust hits or TB
+
+  COMBINED WEATHER SCORE (for convergence check):
+    Each favorable factor scores:
+      Wind 20+ mph out pull side: +3
+      Wind 15-19 mph out pull side: +2
+      Wind 10-14 mph out: +1
+      Temp 80°F+: +1
+      Temp 90°F+: +2
+      Temp 45-54°F: -1
+      Temp below 45°F: -2
+      Wind 20+ mph in: -3
+      Wind 15-19 mph in: -2
+      Wind 10-14 mph in: -1
+    → Save this score for Convergence Check (Step 3)
+
+── STEP 2: PARK SETUP ──────────────────────────────────────
+
+Pull from Fangraphs park factors page for today's stadium:
+  - HR park factor (1-year and 3-year avg)
+  - Runs park factor
+  - Doubles park factor (relevant for TB props)
+  - BABIP park factor (relevant for hits props)
+
+PARK CLASSIFICATION TABLE (approximate benchmarks):
+  HR factor ≥ 115: 🔴 EXTREME HITTER PARK (Coors ~128, GABP ~115, Yankee Stadium ~115)
+  HR factor 105–114: 🟡 HITTER-FRIENDLY
+  HR factor 95–104: ⚪ NEUTRAL
+  HR factor 85–94: 🟡 PITCHER-FRIENDLY
+  HR factor ≤ 84: 🔵 EXTREME PITCHER PARK (Oracle/SF ~78, Petco ~82, Marlins ~80)
+
+PARK NOTES (know these):
+  Coors Field (COL):       HR ~128, BABIP highest MLB, all props elevated significantly
+  Oracle Park (SF):        HR ~78, wind in from bay notorious, all power suppressed
+  Petco Park (SD):         HR ~82, large CF, suppress HR/TB
+  Yankee Stadium (NYY):    HR ~115, short RF, LH power hitters get massive boost
+  Fenway Park (BOS):       HR ~105, doubles elevated (Green Monster), asymmetric
+  GABP (CIN):              HR ~115, small park, power-friendly
+  Camden Yards (BAL):      HR ~110, hitter-friendly
+  Wrigley Field (CHC):     HR ~105 neutral but wind-sensitive (most variable park in MLB)
+  T-Mobile Park (SEA):     HR ~90, suppressive, large dimensions
+  Tropicana Field (TB):    DOME — weather neutral, HR ~95
+
+  PARK SCORE (for convergence check):
+    HR factor ≥ 115: +2
+    HR factor 105–114: +1
+    HR factor 95–104: 0
+    HR factor 85–94: -1
+    HR factor ≤ 84: -2
+    → Save for Convergence Check (Step 3)
+
+── STEP 3: CONVERGENCE CHECK ───────────────────────────────
+
+This is the most important step. When weather + park + matchup all align:
+the book's line was set generically. The true probability is much higher or lower.
+
+CONVERGENCE SCORE = Weather Score + Park Score + Matchup Score
+
+Matchup Score (from Phase 2 and 3):
+  Pitcher Barrel % allowed ≥ 9% (gives up hard contact):          +2
+  Pitcher HR/FB% ≥ 14% (home run prone):                          +2
+  Pitcher in shaky stretch (ERA > 5.00 last 3 starts):            +1
+  Pitcher Hard Hit % allowed ≥ 42% last 3 starts:                 +1
+  Batter Barrel % ≥ 12% (elite power):                            +2
+  Batter career OPS ≥ .900 vs pitcher (Statcast-confirmed):       +2
+  Batter in 15-day CONFIRMED hot streak:                           +1
+  Batter platoon edge (wRC+ vs hand ≥ 115):                       +1
+  Pitcher Barrel % allowed ≤ 5% (power suppressor):               -2
+  Pitcher HR/FB% ≤ 8%:                                            -2
+  Pitcher in confirmed form (velocity up, K% up):                 -1
+  Batter platoon disadvantage (wRC+ vs hand ≤ 85):               -1
+
+CONVERGENCE RESULT:
+  Score +7 or higher: 🌪️ FULL CONVERGENCE — all factors aligned, line is significantly mispriced
+    Example: Judge in Coors, wind 20mph out, warm weather, bad pitcher
+    → HR multipliers stack: park × weather × matchup = true probability far above +130
+    → Flag: FULL CONVERGENCE — take the prop aggressively
+
+  Score +4 to +6: ⛈️ STRONG CONVERGENCE — multiple factors aligned
+    → Apply all individual adjustments, high confidence play
+
+  Score +1 to +3: 🌧️ MILD POSITIVE — slight lean, standard confidence
+
+  Score -1 to -3: 🌧️ MILD NEGATIVE — slight suppression
+
+  Score -4 to -6: ⛈️ STRONG SUPPRESSION — fade the over, line may be inflated
+    Example: Judge in SF vs Logan Webb, wind in from bay, cold
+    → True HR probability far below what +250 implies
+    → Flag: STRONG SUPPRESSION — consider under if available
+
+  Score -7 or lower: 🌪️ FULL SUPPRESSION — all factors aligned against
+    → Power props essentially dead for this game
+    → Flag: FULL SUPPRESSION — do not bet HR or TB overs
+
+CONVERGENCE REFERENCE EXAMPLES:
+  FULL CONVERGENCE example — Judge HR prop at Coors, wind 20mph out, 78°F, bad pitcher:
+    Weather score: +3 (wind 20+ out) +1 (warm) = +4
+    Park score: +2 (Coors HR ~128)
+    Matchup score: +2 (barrel% allowed) +2 (career OPS vs pitcher) +1 (shaky stretch) = +5
+    Total: +11 → 🌪️ FULL CONVERGENCE
+    Model: HR probability × 1.20 from convergence alone. If book is +130 (~43%), model says ~52%.
+    That is free money at +130. Take aggressively.
+
+  FULL SUPPRESSION example — Judge HR prop at Oracle Park (SF), wind 18mph in, 54°F, Logan Webb:
+    Weather score: -2 (wind 15-19 in) -1 (cold 54°F) = -3
+    Park score: -2 (Oracle HR ~78)
+    Matchup score: -2 (Webb barrel% ~4%) -2 (Webb HR/FB% ~7%) -1 (Webb confirmed form) = -5
+    Total: -10 → 🌪️ FULL SUPPRESSION
+    Model: HR probability × 0.80 from convergence alone. If book is +250 (~29%), model says ~23%.
+    Even at +250 this is not value. Do not bet HR. Consider fade if under available.
+
+CONVERGENCE OUTPUT FORMAT (show for every batter prop):
+  Weather:    [temp]°F | Wind: [speed] mph [direction] | Dome: YES/NO
+  Park:       [park name] | HR factor: [X] | Park score: [+/-X]
+  Weather score: [+/-X] | Matchup score: [+/-X]
+  CONVERGENCE: [+/-X total] → [🌪️/⛈️/🌧️] [label]
+
+── STEP 4: CONFIRM MATCHUP ─────────────────────────────────
+
   - Starting pitcher (confirmed, not projected)
   - Pitcher handedness (L or R)
   - Expected lineup (check beat reporters or official lineup release)
   - Batting order position (leadoff vs cleanup affects PA count)
-  - Park (affects HR and hit props — note if extreme park)
-  - Weather (pull from RotoWire — wind out = more HR/TB upside)
   - Catcher framing (pull FRV from Baseball Savant):
       Elite framing (FRV ≥ +8): ✅ adds +0.4-0.6 Ks to pitcher line → lean over on K props
       Poor framing (FRV ≤ -8): ⚠️ costs 0.3-0.5 Ks → lean under on K props
@@ -350,11 +506,18 @@ STEP 4: Project hits
   Base projected hits = Hit rate × Estimated PA
   Early season adjustment: apply blended hit rate
 
-STEP 5: Apply park and weather adjustments
-  High BABIP park (Coors, Fenway): +0.05-0.10 hits
-  Low BABIP park (Oracle, Petco): -0.05-0.10 hits
-  Wind out: +0.03-0.05 (slightly more hard contact)
-  Wind in: -0.03-0.05
+STEP 5: Apply park, weather, and convergence adjustment (from Phase 1)
+  If DOME: skip weather adjustments, apply park BABIP only
+  Park BABIP adjustment:
+    High BABIP park (Coors, Fenway): +0.05-0.10 hits
+    Low BABIP park (Oracle, Petco, Petco, Tropicana): -0.05-0.10 hits
+  Weather (use Phase 1 temperature and wind adjustments):
+    Apply Hits multipliers from Phase 1 weather table
+    Wind 10-14 mph out: × 1.01 | Wind 15-19 mph out: × 1.03 | Wind 20+ mph out: × 1.05
+    Wind 10-14 mph in: neutral | Wind 15-19 mph in: × 0.98 | Wind 20+ mph in: × 0.97
+  Convergence boost (from Phase 1 Convergence Score):
+    Full Convergence (+7 or higher): apply an additional × 1.05 to projected hits
+    Full Suppression (-7 or lower): apply an additional × 0.95
 
 STEP 6: Apply recent form weight (7-day + 15-day gated by Statcast)
 
@@ -430,9 +593,16 @@ STEP 4: Apply park HR factor
   High HR park (Coors, Yankees): +0.10-0.15 TB
   Low HR park (Oracle, Petco): -0.10-0.15 TB
 
-STEP 5: Apply weather
-  Wind 15+ mph out: +0.15-0.25 TB
-  Wind 15+ mph in: -0.15-0.25 TB
+STEP 5: Apply park, weather, and convergence (from Phase 1)
+  If DOME: apply park doubles factor only, skip weather
+  Park doubles factor (Fenway Green Monster: +0.10 TB | suppressive parks: -0.10 TB)
+  Apply temperature multiplier from Phase 1 table (TB column)
+  Apply wind multiplier from Phase 1 table (TB column) — use pull-side direction logic
+  Convergence boost:
+    Full Convergence (+7): additional × 1.08 to projected TB
+    Strong Convergence (+4 to +6): additional × 1.04
+    Strong Suppression (-4 to -6): additional × 0.96
+    Full Suppression (-7): additional × 0.92
 
 STEP 6: Apply recent form weight (same Statcast-gated logic as hits Step 6)
   Use SLG divergence instead of BA divergence as the trigger (>75 pts SLG = meaningful)
@@ -476,9 +646,22 @@ STEP 4: Apply park factor
     90-110: neutral
     < 90: multiply × 0.90
 
-STEP 5: Apply weather
-  Wind 15+ mph out toward batter's pull side: × 1.15
-  Wind 15+ mph in: × 0.85
+STEP 5: Apply park, weather, and convergence (from Phase 1)
+  If DOME: apply park HR factor only, skip weather
+  Apply park HR factor multiplier (from Phase 1 Step 2 table)
+  Apply temperature multiplier from Phase 1 table (HR column)
+  Apply wind multiplier from Phase 1 table (HR column) — pull-side direction is critical here:
+    RH batter + wind out to LF or CF = full multiplier
+    RH batter + wind out to RF = 40% of multiplier
+    LH batter + wind out to RF or CF = full multiplier
+    LH batter + wind out to LF = 40% of multiplier
+  Convergence boost (this is the most important HR adjustment):
+    Full Convergence (+7): HR probability × 1.20 → line is significantly mispriced
+    Strong Convergence (+4 to +6): HR probability × 1.12
+    Mild Positive (+1 to +3): HR probability × 1.05
+    Mild Negative (-1 to -3): HR probability × 0.95
+    Strong Suppression (-4 to -6): HR probability × 0.88
+    Full Suppression (-7): HR probability × 0.80 → line likely overpriced even at +250
 
 STEP 6: Compare to line
   HR prop is usually Over 0.5 at +200 to +350
@@ -557,9 +740,13 @@ FOR BATTER OVER PROPS (hits, TB, HR):
   □ Pitcher BABIP > .330 last 15 days (been getting hit hard, unlucky or not)        → 0.5 pt
   □ Pitcher IVB/VAA/Extension NOT elite (no Tier 2 marks) → easier to square up      → 0.5 pt
 
-  SITUATIONAL BOOSTERS:
-  □ Favorable park (HR factor > 110 or high BABIP park)                              → 0.5 pt
-  □ Favorable weather (wind ≥ 10 mph out toward pull side)                           → 0.5 pt
+  CONVERGENCE BOOSTERS (from Phase 1 Convergence Score):
+  □ Full Convergence score ≥ +7 (weather + park + matchup all aligned)               → 3 pts
+  □ Strong Convergence score +4 to +6                                                → 2 pts
+  □ Mild Positive score +1 to +3                                                     → 0.5 pt
+  □ Mild Negative score -1 to -3                                                     → -0.5 pt
+  □ Strong Suppression score -4 to -6                                                → -2 pts
+  □ Full Suppression score ≤ -7 (all factors working against)                        → -3 pts
   □ Line not moved despite all above (public hasn't noticed)                         → 1 pt
   □ BUY THE DIP scenario (batter in visible slump, Statcast fine, line deflated)     → 1.5 pt
 
@@ -568,7 +755,7 @@ FOR BATTER OVER PROPS (hits, TB, HR):
   □ Pitcher ARSENAL CHANGE since career ABs (stale matchup data)                     → -1 pt
   □ Batter early season < 100 PA (small sample)                                      → -0.5 pt
   □ Lineup uncertainty (batter batting order not confirmed)                           → -0.5 pt
-  □ Unfavorable weather (wind ≥ 10 mph in)                                           → -0.5 pt
+  □ DOME — park/weather factors nullified (reduce park-based PSS factors)            → -0.5 pt
 
 FOR PITCHER OVER K PROPS:
   □ Pitcher Chase Rate induced ≥ 33% AND team Chase Rate ≥ 30%                      → 1.5 pt
@@ -627,8 +814,9 @@ Batter splits:      [wRC+ vs [hand]: XXX | BA: .XXX | SLG: .XXX]
 Model projection:   [X.XX Ks / X.XX hits / X.XX TB / X.X% HR prob]
 Line:               [X.5]
 Edge:               [+/- X.X above/below line]
-Weather:            [temp, wind, adjustment applied]
-Park factor:        [park name, HR factor, lean]
+Weather:            [temp]°F | Wind: [speed] mph [direction] | Dome: YES/NO
+Park:               [park name] | HR factor: [X] | Park score: [+/-X]
+Convergence:        [+/-X total score] → [🌪️ FULL / ⛈️ STRONG / 🌧️ MILD] [label]
 Early season note:  [SMALL SAMPLE — blended with 2025 / Full 2026 sample]
 
 Perfect Storm Score: [X pts] — [🌪️ PERFECT STORM / ⛈️ STRONG CONVERGENCE / 🌧️ MODERATE EDGE]
@@ -686,6 +874,11 @@ Hook bank (props-specific, rotate — never repeat same day):
   "The public is fading the slump. The robot checked the Statcast data. Different conclusion."
   "Hot streak. Line moved up. Exit velocity did not move. The robot is fading the narrative."
   "Seven days of bad box scores. Sweet Spot Rate unchanged. The model sees a buy-the-dip."
+  "Wind blowing out. Hitter's park. Bad pitcher. The model calls this a perfect storm."
+  "Coors Field. Wind out. Soft pitcher. The book said plus one thirty. The model says that is wrong."
+  "Oracle Park. Wind in from the bay. Logan Webb on the mound. The model says no on the home run."
+  "Park factor plus weather plus matchup. All three aligned. The convergence score is off the charts."
+  "The book set the line without checking the wind. The robot checked the wind. Different number."
 
 Close rotation (same as game model — rotate):
   "SharpSportsPicks AI. Subscribe if you enjoy robots doing your homework."
