@@ -15,10 +15,25 @@ CORE PHILOSOPHY
 ════════════════════════════════════════════════════════════════
 
 This model does not bet ERA. ERA is noise.
-This model bets SIERA, xFIP, wRC+, and exit velocity.
+This model bets SIERA, xFIP, wRC+, exit velocity, Chase Rate, and Sweet Spot Rate.
 The public prices off last week's box score.
-We price off underlying process metrics.
+We price off underlying process metrics — including ones most bettors have never heard of.
 That gap is where the money lives across a 162-game season.
+
+METRIC GLOSSARY (reference):
+  SIERA     — Skill-Interactive ERA. Best single ERA estimator. Accounts for batted ball mix.
+  xFIP      — FIP with HR rate normalized to league avg. Removes HR luck.
+  CSW%      — Called Strikes + Whiffs %. Best in-game pitch quality proxy.
+  SwStr%    — Swinging strike %. Measures pure bat-missing ability.
+  Chase Rate — % of pitches outside zone the batter swings at. High chase = easier to K and suppress hits.
+  Whiff %   — % of swings that miss. Pitcher whiff rate feeds K%; batter whiff rate feeds hit suppression.
+  Sweet Spot Rate — % of batted balls at launch angle 8-32°. Predicts BABIP better than hard hit % alone.
+  BABIP     — Batting avg on balls in play. High pitcher BABIP = bad luck → regression coming.
+  OAA       — Outs Above Average. Team fielding quality. Affects hits allowed behind pitcher.
+  FRV       — Framing Run Value. Catcher's ability to steal called strikes. Adds real Ks to pitcher total.
+  IVB       — Induced Vertical Break. Spin-induced fastball rise. High IVB = hitters swing under it.
+  VAA       — Vertical Approach Angle. Flatter angle (-4.1° or better) = harder to square up.
+  Extension — Release distance from rubber (ft). Higher = less batter reaction time = more Ks.
 
 EARLY SEASON PROTOCOL (April – May, fewer than 8 starts):
   - Blend current 2026 stats with 2025 full-season stats
@@ -87,7 +102,10 @@ For every game confirm:
   - Starting pitcher both teams (confirmed, not projected)
   - Any lineup changes from expected
   - Injury report: OUT / QUESTIONABLE players
-  - Catcher (affects pitcher framing stats)
+  - Catcher (affects pitcher framing and K rate):
+      Pull catcher FRV (Framing Run Value) from Baseball Savant
+      Elite framing (FRV ≥ +8): flag ✅ FRAMING EDGE — worth +0.4-0.6 Ks per start
+      Poor framing (FRV ≤ -8): flag ⚠️ FRAMING DRAG — lose 0.3-0.5 Ks per start
   - Is any pitcher on short rest? (< 4 days)
   - Bullpen rest: top relievers days since last appearance
 
@@ -106,11 +124,22 @@ For each starting pitcher pull from Fangraphs:
   - GB%, FB%, LD%
   - Hard Hit % allowed
   - CSW% (called strikes + whiffs %)
+  - SwStr% (swinging strike %)
   - Barrel % allowed
+  - Chase Rate induced (% of out-of-zone pitches batters swing at — higher = more K ability)
+  - Whiff % by pitch type (fastball, breaking, offspeed) — from Savant
+  - BABIP allowed (note if > .330 = bad luck → ERA inflated | < .270 = good luck → ERA deflated)
   - Number of starts (for early season blending flag)
 
+  TIER 2 — PITCH QUALITY FLAGS (pull from Baseball Savant, note but don't formula-adjust):
+  - IVB (Induced Vertical Break): elite ≥ 18" on fastball → hitters swing under it → K upside
+  - VAA (Vertical Approach Angle): elite ≥ -4.1° → flat entry angle → hard to square up
+  - Extension: elite ≥ 7.4 ft → less batter reaction time → K multiplier
+  - Non-Magnus / Seam-Shifted Wake: if pitcher known for SSW movement → flag as whiff multiplier
+  → If pitcher hits 2+ Tier 2 elite marks: flag ✅ PITCH QUALITY ELITE — K projection gets +5% boost
+
   PRIOR SEASON (2025) — for early season blending:
-  - SIERA, xFIP, K-BB%, Hard Hit % allowed, Barrel % allowed
+  - SIERA, xFIP, K-BB%, Hard Hit % allowed, Barrel % allowed, Chase Rate induced
 
   SPLITS — pull all of these from Fangraphs splits tab:
   vs LHB:
@@ -163,6 +192,18 @@ For each team offense pull from Fangraphs:
   - Team xBA, xSLG, xwOBA
   - Average Exit Velocity
   - Team Hard Hit % vs LHP and vs RHP (if available)
+  - Team Sweet Spot Rate (launch angle 8-32°) — elite ≥ 40%, poor ≤ 32.5%
+      High Sweet Spot Rate + high Hard Hit % = true power threat (not just loud outs)
+      Low Sweet Spot Rate despite high exit velo = ground ball-heavy, fewer runs than velo suggests
+  - Team Chase Rate (% swings at pitches outside zone) — elite ≤ 19%, poor ≥ 31%
+      High team Chase Rate vs today's pitcher = pitcher has chase-inducing stuff → suppress runs
+  - Team Whiff % vs pitcher hand (if available)
+
+  TEAM DEFENSE ADJUSTMENT (pull team OAA from Baseball Savant):
+  - Team OAA (Outs Above Average — fielding quality rating)
+      Elite defense (OAA ≥ +20): flag ✅ DEFENSE EDGE — pitcher's BABIP suppressed → fewer hits
+      Poor defense (OAA ≤ -15): flag ⚠️ DEFENSE DRAG — pitcher's BABIP inflated → more hits
+      Adjustment applied in Phase 5 Step 3b
 
 Park factors (pull from Fangraphs park factors page):
   - 1-year and 3-year park factor for runs
@@ -180,6 +221,16 @@ STEP 1: Blend SIERA and xFIP into composite ERA estimate
   Early season adjustment (< 8 starts):
   Composite ERA = (starts/8 × 2026 Composite) + ((8-starts)/8 × 2025 Composite)
   Flag with ⚠️ SMALL SAMPLE if blended
+
+  BABIP REGRESSION SIGNAL (apply after composite ERA):
+  Compare pitcher's current BABIP allowed vs league avg (~.295-.305):
+    BABIP > .330: pitcher has been unlucky → ERA inflated above true talent
+      Signal: ERA likely to drop → lean UNDER on runs if SIERA gap is ≥ 0.50
+      Flag: ⚠️ BABIP REGRESSION — ERA overstated, SIERA more predictive
+    BABIP < .270: pitcher has been lucky → ERA suppressed below true talent
+      Signal: ERA likely to rise → lean OVER on runs if gap is ≥ 0.50
+      Flag: ⚠️ BABIP LUCK — ERA understated, regression risk
+    BABIP .270-.330: neutral, no regression flag needed
 
 STEP 2: Adjust for opponent offense (USE HANDEDNESS SPLITS)
   Pull team wRC+ vs pitcher hand (LHP or RHP):
@@ -200,6 +251,22 @@ STEP 2: Adjust for opponent offense (USE HANDEDNESS SPLITS)
 
 STEP 3: Apply park factor
   Park Adjusted ERA = Adjusted ERA × (park factor / 100)
+
+STEP 3b: Apply team defense adjustment (OAA from Phase 4)
+  Defense behind the pitcher affects BABIP → runs allowed
+  Elite defense (OAA ≥ +20):  Park Adj ERA × 0.95  (saves ~0.15-0.20 ERA)
+  Good defense (OAA +10 to +19): Park Adj ERA × 0.97
+  Average defense (OAA -9 to +9): no adjustment
+  Poor defense (OAA -10 to -19): Park Adj ERA × 1.03
+  Bad defense (OAA ≤ -20):    Park Adj ERA × 1.05  (costs ~0.15-0.20 ERA)
+  Defense Adjusted ERA = Park Adj ERA × defense multiplier
+
+STEP 3c: Apply catcher framing adjustment (FRV from Phase 3)
+  Elite framing catcher (FRV ≥ +8):  Defense Adj ERA × 0.97  (-0.10 to -0.15 ERA)
+  Average framing (FRV -7 to +7):    no adjustment
+  Poor framing catcher (FRV ≤ -8):   Defense Adj ERA × 1.03  (+0.10 to +0.15 ERA)
+  Framing Adjusted ERA = Defense Adj ERA × framing multiplier
+  (Use Framing Adjusted ERA as input for Steps 4-6)
 
 STEP 4: Apply weather adjustment (from Phase 1)
   Weather ERA adjustment: for every +1 run weather adds to total,
@@ -223,11 +290,15 @@ STEP 8: Total projected runs allowed
 Show every step. Example:
   Pitcher: [Name]
   SIERA: 3.21 | xFIP: 3.45 → Composite ERA: 3.31
+  BABIP allowed: .318 → neutral, no regression flag
   vs [opponent] wRC+ [vs hand]: 108 → Offensive Adj: 1.08
+  Platoon split: K% vs LHB 24% / vs RHB 19% → using LHB split (lineup is LH-heavy)
   Adjusted ERA: 3.57 | Park Factor: 105 → Park Adj ERA: 3.75
-  Expected IP: 5.2 | Starter Runs: (3.75/9) × 5.2 = 2.17
+  Team OAA: -18 → Defense multiplier: 1.03 → Defense Adj ERA: 3.86
+  Catcher FRV: +11 → Framing multiplier: 0.97 → Framing Adj ERA: 3.74
+  Expected IP: 5.2 | Starter Runs: (3.74/9) × 5.2 = 2.16
   Bullpen ERA (7d): 4.12 | Bullpen IP: 3.8 | Bullpen Runs: 1.74
-  Total Projected Runs Allowed: 3.91
+  Total Projected Runs Allowed: 3.90
 
 Do this for BOTH teams.
 
@@ -245,6 +316,23 @@ STEP 2: Team offensive rating
 STEP 3: Adjust for opposing pitcher quality
   Pitcher Quality Factor = 1 - ((4.50 - Projected Runs Allowed by starter) / 4.50 × 0.4)
   Adjusted Projected Runs = Base Projected Runs × Pitcher Quality Factor
+
+STEP 3b: Apply Chase Rate matchup adjustment
+  If team Chase Rate vs pitcher hand is high (≥ 30%) AND pitcher induces high chase (≥ 33%):
+    → Double chase edge: offense is undisciplined vs pitcher who exploits it
+    → Adjusted Projected Runs × 0.94
+  If team Chase Rate is low (≤ 20%) AND pitcher chase rate is low (≤ 26%):
+    → Patient lineup vs contact-allowing pitcher = more baserunners
+    → Adjusted Projected Runs × 1.04
+  Else: no chase adjustment
+
+STEP 3c: Apply Sweet Spot Rate quality check
+  Sweet Spot Rate measures whether hard contact is at useful launch angles
+  If team Sweet Spot Rate is low (≤ 32.5%) despite high Hard Hit %:
+    → Loud outs team — runs projection gets -3% adjustment (fewer XBH convert)
+  If team Sweet Spot Rate is elite (≥ 40%) with Hard Hit % ≥ 42%:
+    → True quality contact — runs projection gets +3% adjustment
+  Else: neutral
 
 STEP 4: Apply park factor
   Park Adjusted Runs = Adjusted Projected Runs × (park factor / 100)

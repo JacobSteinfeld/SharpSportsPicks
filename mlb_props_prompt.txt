@@ -15,12 +15,24 @@ CORE PHILOSOPHY
 
 Props are matchup bets. Not player reputation bets.
 The model doesn't care if the batter is an All-Star.
-The model cares how he hits against this pitcher's stuff.
+The model cares how he hits against this pitcher's stuff — at this launch angle — against this hand.
 
 Two data sources. That's it:
-  - Fangraphs: K%, BB%, wRC+, ISO, splits by hand, rolling stats
-  - Baseball Savant (Statcast): exit velocity, barrel %, hard hit %,
-    xBA, xSLG, whiff %, CSW%, spin rate, pitch mix
+  - Fangraphs: K%, BB%, wRC+, ISO, Chase Rate, splits by hand, rolling stats
+  - Baseball Savant (Statcast): exit velocity, barrel %, hard hit %, Sweet Spot Rate,
+    xBA, xSLG, whiff %, Chase Rate, CSW%, IVB, VAA, Extension, FRV
+
+METRIC GLOSSARY (reference — know these before projecting):
+  Chase Rate (batter) — % of out-of-zone pitches swung at. High = easier to K, suppress hits.
+  Chase Rate (pitcher) — % of pitches out of zone that batters chase. High = more K ability.
+  Sweet Spot Rate  — % of batted balls at launch angle 8-32°. Best BABIP predictor.
+  CSW%             — Called Strikes + Whiffs. Best pitch quality proxy per pitch.
+  SwStr%           — Swinging strike %. Pure bat-missing rate.
+  FRV              — Framing Run Value. Catcher stolen strikes. Adds real Ks to pitcher line.
+  IVB              — Induced Vertical Break. Fastball spin-rise. Elite ≥ 18" → hitters swing under.
+  VAA              — Vertical Approach Angle. Elite ≥ -4.1° → harder to square up.
+  Extension        — Release distance (ft). Elite ≥ 7.4 ft → less reaction time → more Ks.
+  BABIP            — Avg on balls in play. Regresses toward .300 over time.
 
 EARLY SEASON PROTOCOL (April – May, fewer than 8 starts / 100 PA):
   - Blend current 2026 stats with 2025 full-season stats
@@ -39,7 +51,9 @@ Before any projections, confirm:
   - Batting order position (leadoff vs cleanup affects PA count)
   - Park (affects HR and hit props — note if extreme park)
   - Weather (pull from RotoWire — wind out = more HR/TB upside)
-  - Catcher framing (affects pitcher K rate — note if elite framing catcher)
+  - Catcher framing (pull FRV from Baseball Savant):
+      Elite framing (FRV ≥ +8): ✅ adds +0.4-0.6 Ks to pitcher line → lean over on K props
+      Poor framing (FRV ≤ -8): ⚠️ costs 0.3-0.5 Ks → lean under on K props
 
 Flag any matchup uncertainty:
   [CONFIRMED] — starter locked in, lineup posted
@@ -64,29 +78,49 @@ STEP 1: Pull pitcher K rate data from Fangraphs
     - K% overall
     - CSW% (called strikes + whiffs %) from Savant
     - SwStr% (swinging strike %)
-    - Whiff % by pitch type (Savant)
+    - Whiff % by pitch type (Savant — fastball, breaking, offspeed)
+    - Chase Rate induced (% of out-of-zone pitches batters swing at)
+        Elite ≥ 33%: strong put-away ability → K projection gets +5% boost
+        Poor ≤ 26%: batters lay off → K projection gets -5% trim
+    - BABIP allowed (regression signal — see game prompt Phase 5)
     - Number of starts (for early season flag)
 
   HANDEDNESS SPLITS (from Fangraphs splits tab):
   vs LHB:
     - K%, BB%, ERA, WHIP, Hard Hit % allowed, Barrel % allowed
     - CSW% vs LHB (Savant if available)
+    - Chase Rate induced vs LHB (if available)
   vs RHB:
     - K%, BB%, ERA, WHIP, Hard Hit % allowed, Barrel % allowed
     - CSW% vs RHB (Savant if available)
+    - Chase Rate induced vs RHB (if available)
   → Use the split matching the opposing lineup's dominant hand
   → Flag if pitcher has ≥5% K% gap by hand: ⚠️ PLATOON SPLIT — adjust projection
 
-  Prior season (2025) — for early season blend:
-    - K% overall, K% vs LHB, K% vs RHB, CSW%, SwStr%
+  TIER 2 — PITCH QUALITY FLAGS (pull from Baseball Savant, note as flags):
+    - IVB (Induced Vertical Break): ≥ 18" on fastball → ✅ K MULTIPLIER
+    - VAA (Vertical Approach Angle): ≥ -4.1° → ✅ K MULTIPLIER
+    - Extension: ≥ 7.4 ft → ✅ K MULTIPLIER
+    - Non-Magnus / Seam-Shifted Wake: note if pitcher known for SSW → extra whiff
+    → If pitcher hits 2+ Tier 2 marks: apply +5% to final K projection
+    → If all 3 (IVB + VAA + Extension) are elite: apply +8% to final K projection
+    → Label: ✅ PITCH QUALITY ELITE
 
-STEP 2: Pull opponent lineup K rate from Fangraphs
+  Prior season (2025) — for early season blend:
+    - K% overall, K% vs LHB, K% vs RHB, CSW%, SwStr%, Chase Rate induced
+
+STEP 2: Pull opponent lineup K and chase data from Fangraphs + Savant
   - Team K% vs LHP (if pitcher is LH) or vs RHP (if pitcher is RH)
+  - Team Chase Rate vs pitcher hand (if available from Savant)
+      High team chase (≥ 30%) vs this pitcher's chase-inducing style = K edge
+      Low team chase (≤ 20%) = disciplined lineup, harder to fan
   - Last 7 days team K rate vs pitcher hand
   - Individual batter K% vs pitcher hand for each batter in lineup (1-9)
+  - Individual batter Chase Rate (Savant) for key batters — high chaser = more Ks
   - Individual batter career K% vs this pitcher (if 10+ PA)
   - Flag if lineup has 4+ batters with K% >27% vs pitcher hand: ✅ HIGH-K LINEUP
   - Flag if lineup has 4+ batters with K% <18% vs pitcher hand: ⚠️ LOW-K LINEUP
+  - Flag if team Chase Rate ≥ 30% vs this pitcher hand: ✅ CHASE-HEAVY LINEUP → K boost
 
 STEP 3: Estimate plate appearances
   Expected PA = Expected IP × (PA per inning estimate)
@@ -97,12 +131,26 @@ STEP 3: Estimate plate appearances
 STEP 4: Project strikeouts
   Base K rate = blended pitcher K% vs opposing lineup's dominant hand
     (use vs LHB split if LH-heavy lineup, vs RHB if RH-heavy, overall if mixed)
+
   Opponent K rate adjustment:
     Adjusted K% = Base K% vs hand × (opponent team K% vs pitcher hand / MLB avg K% vs hand)
     MLB avg K%: ~22%
+
+  Chase Rate matchup multiplier:
+    Pitcher Chase Rate induced ≥ 33% AND team Chase Rate ≥ 30%: × 1.07
+    Pitcher Chase Rate induced ≥ 33% AND team Chase Rate neutral (20-29%): × 1.03
+    Pitcher Chase Rate induced ≤ 26% AND team Chase Rate ≤ 20%: × 0.93
+    Otherwise: no chase adjustment
+
   Career matchup adjustment:
     If key batters (accounting for 3+ PA each) have career K% vs this pitcher ≥35%: × 1.05
     If key batters have career K% vs this pitcher ≤15%: × 0.95
+
+  Tier 2 pitch quality boost (from Step 1 flags):
+    2 elite Tier 2 marks (IVB/VAA/Extension): × 1.05
+    All 3 elite: × 1.08
+    No elite marks: no adjustment
+
   Projected K = Adjusted K% × Expected PA
 
   Early season blend:
@@ -112,7 +160,9 @@ STEP 4: Project strikeouts
 STEP 5: Apply game environment adjustments
   Weather (wind in from OF ≥ 15 mph): +0.25-0.5 K (hitters defensive, more Ks)
   Weather (wind out): -0.1 to -0.2 K (hitters aggressive, harder to fan)
-  Elite framing catcher: +0.3-0.5 K (borderline strikes called)
+  Catcher FRV ≥ +8 (elite framing): +0.4-0.6 K
+  Catcher FRV ≤ -8 (poor framing): -0.3-0.5 K
+  Catcher FRV -7 to +7: no adjustment
   Extreme pitcher's park: +0.2 K
   Hitter's park: -0.1 K
 
@@ -200,7 +250,15 @@ For each batter prop, pull from Fangraphs:
     - Exit velocity avg
     - Hard hit % (95+ mph) overall AND vs pitcher hand if available
     - Barrel %
+    - Sweet Spot Rate (launch angle 8-32°):
+        ≥ 40% elite: high quality contact → hits and TB over more reliable
+        ≤ 32.5% poor: ground ball / pop-up tendency → suppress hit/TB overs
+        Note: Hard Hit % without Sweet Spot Rate = "loud outs" trap
     - xBA, xSLG, xwOBA
+    - Chase Rate (% of out-of-zone pitches swung at):
+        ≥ 30% high chase: batter vulnerable to breaking balls away → suppress hit overs
+        ≤ 20% low chase: disciplined eye → more counts, more walks, better OBP
+        Use this vs pitcher's chase-inducing tendencies (see pitcher Chase Rate)
     - Whiff % overall AND vs pitcher hand (affects K prop + hits prop)
     - Sprint speed (affects infield hits / SB props)
     - Pull % (affects HR projection vs park RF/LF)
@@ -226,6 +284,20 @@ STEP 2: Adjust for pitcher quality (use pitcher splits vs batter hand)
     If K% vs hand < 20%: hit rate × 1.04
   Pitcher BABIP allowed vs batter hand (use if available from Savant)
   Pitcher Hard Hit % allowed vs batter hand: if > 40% allowed → slight hit rate bump
+
+  Chase Rate matchup (batter Chase Rate vs pitcher Chase Rate induced):
+    Batter Chase ≥ 30% AND pitcher Chase induced ≥ 33%:
+      → Batter chases pitcher's best out-pitch → hit rate × 0.92
+    Batter Chase ≤ 20% AND pitcher Chase induced ≤ 26%:
+      → Disciplined batter vs pitcher who can't put away → more counts → hit rate × 1.05
+    Otherwise: no chase adjustment
+
+  Sweet Spot Rate quality check (batter contact profile):
+    Batter Sweet Spot Rate ≥ 40% AND Hard Hit % ≥ 42%:
+      → True contact quality → BABIP likely stable or above avg → hit rate × 1.04
+    Batter Sweet Spot Rate ≤ 32.5% despite Hard Hit % ≥ 40%:
+      → Loud outs trap → hits likely below exit velo would suggest → hit rate × 0.96
+    Otherwise: neutral
 
   Career matchup adjustment (batter vs this specific pitcher):
     If 20+ career PA vs pitcher:
@@ -287,6 +359,11 @@ STEP 3: Adjust for pitcher power suppression
   Pitcher HR/FB% vs hand:
     ≤ 8%: -0.10 TB
     ≥ 14%: +0.15 TB
+
+  Batter Sweet Spot Rate quality check:
+    Sweet Spot ≥ 40% + Hard Hit ≥ 42%: TB projection × 1.05 (true XBH producer)
+    Sweet Spot ≤ 32.5% despite high exit velo: TB projection × 0.95 (loud grounders/popups)
+    Otherwise: neutral
 
 STEP 4: Apply park HR factor
   High HR park (Coors, Yankees): +0.10-0.15 TB
