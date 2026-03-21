@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+~$*
+*.xlsx
+performance_chart.png
+context_card_*.txt
+daily_prompt_*.txt
+report_*.txt
+result_check_*.txt
+madness_prompt_*.txt
+daily_focus.txt
