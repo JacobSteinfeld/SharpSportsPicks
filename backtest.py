@@ -2,19 +2,20 @@
 """
 SharpSportsPicks AI — MLB Model Backtester
 ==========================================
-Validates the core SIERA/xFIP/wRC+ projection model against real 2025 results.
+Validates the SIERA/xFIP/wRC+ projection model and compares projections
+against real Vegas closing totals to simulate actual betting ROI.
 
 Usage:
-  python backtest.py                    → run full backtest (20 test games)
-  python backtest.py --sample 10        → run 10 randomly sampled games
-  python backtest.py --date 2025-07-15  → run all games on a specific date
+  python backtest.py                    → 40 real 2025 games (no Vegas data)
+  python backtest.py --season 2021      → 2021 games WITH Vegas odds comparison
+  python backtest.py --n 80 --season 2021 --edge 1.0   → 80 games, bet when model
+                                                           diverges ≥1.0 run from Vegas
+  python backtest.py --quiet --season 2021              → summary only
 
-Install dep if needed: pip install pybaseball==2.2.7 pandas openpyxl
-
-Data note: Uses full-season Fangraphs stats (SIERA/xFIP/wRC+) loaded once.
-  This is the most accurate representation of pitcher "true talent" and is
-  the correct way to validate whether the model FORMULA works correctly.
-  Real-time betting uses stats through game day (built into morning workflow).
+Install: pip install pybaseball==2.2.7 pandas openpyxl
+Vegas data: SBR free archives available for 2011-2021 (auto-downloaded).
+            For 2022+ use --odds-csv to supply your own CSV with columns:
+            date,away_team,home_team,close_total
 """
 
 import argparse
@@ -63,6 +64,227 @@ def _load_batting(year: int) -> pd.DataFrame:
             print("  ✗ Could not load batting stats from Fangraphs.")
             _BAT_CACHE = pd.DataFrame()
     return _BAT_CACHE
+
+
+# ── Vegas Odds (SBR archives) ─────────────────────────────────────────────────
+# SBR publishes free historical MLB odds through 2021.
+# Teams use SBR abbreviations which differ from our standard ones.
+
+SBR_BASE_URL = "https://www.sportsbookreviewsonline.com/wp-content/uploads/sportsbookreviewsonline_com_737"
+
+# SBR team name → our standard abbreviation
+SBR_TO_STD = {
+    "CUB": "CHC", "SDG": "SDP", "SFO": "SFG", "CWS": "CHW",
+    "KAN": "KCR", "TAM": "TBR", "WAS": "WSN",
+}
+
+# Our standard abbreviation → SBR team name (reverse of above + passthrough)
+STD_TO_SBR = {v: k for k, v in SBR_TO_STD.items()}
+
+_ODDS_CACHE: Optional[pd.DataFrame] = None
+
+
+def _sbr_date_int(date_str: str) -> int:
+    """Convert '2021-04-15' → 415  |  '2021-10-03' → 1003."""
+    dt = datetime.strptime(date_str, "%Y-%m-%d")
+    return dt.month * 100 + dt.day
+
+
+def _to_sbr(abbr: str) -> str:
+    return STD_TO_SBR.get(abbr.upper(), abbr.upper())
+
+
+def load_sbr_odds(year: int, odds_csv: Optional[str] = None) -> pd.DataFrame:
+    """
+    Load Vegas closing totals.
+    - If odds_csv provided: load from local CSV (date,away_team,home_team,close_total)
+    - If SBR year (2011-2021): auto-download from SBR archives
+    - Otherwise: return empty DataFrame (no odds comparison)
+    """
+    global _ODDS_CACHE
+    if _ODDS_CACHE is not None:
+        return _ODDS_CACHE
+
+    # Manual CSV override
+    if odds_csv:
+        try:
+            _ODDS_CACHE = pd.read_csv(odds_csv)
+            print(f"  → Loaded Vegas odds from {odds_csv} ({len(_ODDS_CACHE)} rows)")
+            return _ODDS_CACHE
+        except Exception as e:
+            print(f"  ⚠  Could not load odds CSV: {e}")
+            _ODDS_CACHE = pd.DataFrame()
+            return _ODDS_CACHE
+
+    # SBR free archive (2011-2021)
+    if year < 2011 or year > 2021:
+        print(f"  ℹ  Vegas odds: SBR archives only cover 2011-2021. Use --odds-csv for {year}.")
+        _ODDS_CACHE = pd.DataFrame()
+        return _ODDS_CACHE
+
+    import urllib.request, io
+    url = f"{SBR_BASE_URL}/mlb-odds-{year}.xlsx"
+    print(f"  → Downloading SBR {year} MLB odds...", flush=True)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            raw = r.read()
+        df = pd.read_excel(io.BytesIO(raw))
+        # Rename the unnamed juice columns for clarity
+        df = df.rename(columns={
+            "Unnamed: 18": "RunLineJuice",
+            "Unnamed: 20": "OpenOUJuice",
+            "Unnamed: 22": "CloseOUJuice",
+        })
+        print(f"  → SBR odds loaded: {len(df)} rows ({len(df)//2} games)")
+        _ODDS_CACHE = df
+        return _ODDS_CACHE
+    except Exception as e:
+        print(f"  ⚠  Could not download SBR odds: {e}")
+        _ODDS_CACHE = pd.DataFrame()
+        return _ODDS_CACHE
+
+
+def get_vegas_total(date_str: str, away_abbr: str, home_abbr: str,
+                    odds_df: pd.DataFrame) -> Optional[float]:
+    """
+    Look up the closing total for a game from SBR odds data.
+    Returns the CloseOU float or None if not found.
+    """
+    if odds_df.empty:
+        return None
+
+    # SBR date format: MMDD as int (no leading zero for month)
+    date_int = _sbr_date_int(date_str)
+    sbr_away = _to_sbr(away_abbr)
+    sbr_home = _to_sbr(home_abbr)
+
+    # Find visitor row for this game
+    mask = (
+        (odds_df["Date"] == date_int) &
+        (odds_df["VH"] == "V") &
+        (odds_df["Team"].str.upper() == sbr_away)
+    )
+    rows = odds_df[mask]
+
+    if rows.empty:
+        # Try home team as anchor instead
+        mask2 = (
+            (odds_df["Date"] == date_int) &
+            (odds_df["VH"] == "H") &
+            (odds_df["Team"].str.upper() == sbr_home)
+        )
+        rows = odds_df[mask2]
+
+    if rows.empty:
+        return None
+
+    val = rows.iloc[0]["CloseOU"]
+    try:
+        return float(val) if val and str(val) != "nan" else None
+    except (ValueError, TypeError):
+        return None
+
+
+# ── Betting simulation ─────────────────────────────────────────────────────────
+
+def simulate_bet(model_proj: float, vegas_line: float, actual_total: int,
+                 edge_threshold: float = 1.5) -> Optional[Dict]:
+    """
+    Simulate one over/under bet.
+    edge = model_proj - vegas_line
+    |edge| >= edge_threshold → place bet
+    Juice: -110 standard (win 1.0u, lose 1.1u)
+    """
+    edge = round(model_proj - vegas_line, 2)
+    if abs(edge) < edge_threshold:
+        return None  # no edge, no bet
+
+    bet_side = "OVER" if edge > 0 else "UNDER"
+
+    if actual_total == vegas_line:
+        return {"side": bet_side, "edge": edge, "outcome": "PUSH", "units": 0.0}
+
+    win = (bet_side == "OVER" and actual_total > vegas_line) or \
+          (bet_side == "UNDER" and actual_total < vegas_line)
+
+    return {
+        "side":   bet_side,
+        "edge":   edge,
+        "outcome": "WIN" if win else "LOSS",
+        "units":   1.0 if win else -1.1,
+    }
+
+
+def print_betting_summary(results: List[Dict], edge_threshold: float) -> None:
+    """Print full betting ROI analysis."""
+    bets = [r for r in results if r.get("bet") is not None]
+    if not bets:
+        print(f"\n  No bets placed (no Vegas odds data or no edges ≥ {edge_threshold} runs).")
+        return
+
+    wins   = sum(1 for b in bets if b["bet"]["outcome"] == "WIN")
+    losses = sum(1 for b in bets if b["bet"]["outcome"] == "LOSS")
+    pushes = sum(1 for b in bets if b["bet"]["outcome"] == "PUSH")
+    total  = wins + losses + pushes
+    units  = sum(b["bet"]["units"] for b in bets)
+    wp     = wins / (wins + losses) * 100 if (wins + losses) > 0 else 0
+    roi    = units / total * 100 if total > 0 else 0
+
+    print(f"\n{'═'*62}")
+    print(f"  BETTING SIMULATION vs Vegas Closing Total")
+    print(f"  Edge threshold: ≥ {edge_threshold} runs | Juice: -110 standard")
+    print(f"{'═'*62}")
+    print(f"  Bets:       {total}  (W {wins}  L {losses}  P {pushes})")
+    print(f"  Win rate:   {wp:.1f}%  (break-even = 52.4%)")
+    print(f"  Units:      {units:+.2f}u")
+    print(f"  ROI:        {roi:+.1f}%  {'✅ PROFITABLE' if roi > 0 else '❌ LOSING'}")
+
+    # By edge tier
+    print(f"\n  BY EDGE TIER:")
+    tiers = [
+        ("0.5-1.0", 0.5, 1.0),
+        ("1.0-1.5", 1.0, 1.5),
+        ("1.5-2.0", 1.5, 2.0),
+        ("2.0-2.5", 2.0, 2.5),
+        ("2.5+",    2.5, 99),
+    ]
+    for label, lo, hi in tiers:
+        tier_bets = [b for b in bets if lo <= abs(b["bet"]["edge"]) < hi]
+        if not tier_bets:
+            continue
+        tw = sum(1 for b in tier_bets if b["bet"]["outcome"] == "WIN")
+        tl = sum(1 for b in tier_bets if b["bet"]["outcome"] == "LOSS")
+        tu = sum(b["bet"]["units"] for b in tier_bets)
+        twp = tw / (tw + tl) * 100 if (tw + tl) > 0 else 0
+        print(f"    Edge {label:>8}  {len(tier_bets):>3} bets  W{tw}/L{tl}  "
+              f"WR {twp:.0f}%  {tu:+.1f}u")
+
+    # Over vs Under split
+    print(f"\n  OVER vs UNDER:")
+    for side in ["OVER", "UNDER"]:
+        side_bets = [b for b in bets if b["bet"]["side"] == side]
+        if not side_bets:
+            continue
+        sw = sum(1 for b in side_bets if b["bet"]["outcome"] == "WIN")
+        sl = sum(1 for b in side_bets if b["bet"]["outcome"] == "LOSS")
+        su = sum(b["bet"]["units"] for b in side_bets)
+        swp = sw / (sw + sl) * 100 if (sw + sl) > 0 else 0
+        print(f"    {side:<6}  {len(side_bets):>3} bets  W{sw}/L{sl}  WR {swp:.0f}%  {su:+.1f}u")
+
+    # Individual bet log
+    print(f"\n  BET LOG:")
+    print(f"  {'Date':<12} {'Matchup':<14} {'Proj':>5} {'Vegas':>6} {'Edge':>6} "
+          f"{'Side':<6} {'Actual':>7}  Outcome")
+    print(f"  {'─'*72}")
+    for r in sorted(bets, key=lambda x: x["date"]):
+        b = r["bet"]
+        sym = "✅" if b["outcome"] == "WIN" else ("⬜" if b["outcome"] == "PUSH" else "❌")
+        print(f"  {r['date']:<12} {r['matchup']:<14} {r['proj_total']:>5.1f} "
+              f"{r['vegas_total']:>6.1f} {b['edge']:>+6.1f} {b['side']:<6} "
+              f"{r['actual_total']:>7}  {sym} {b['outcome']}")
+
+    print(f"{'═'*62}")
 
 
 # ── Park Factors (2025 approximations, Fangraphs 3-year avg) ─────────────────
@@ -440,7 +662,9 @@ def avg_ip_per_start(pitcher_stats: dict) -> float:
 # ── Run one game ──────────────────────────────────────────────────────────────
 
 def run_game(game_tuple: tuple, verbose: bool = True,
-             known_score: Optional[Tuple[int, int]] = None) -> Optional[Dict]:
+             known_score: Optional[Tuple[int, int]] = None,
+             vegas_total: Optional[float] = None,
+             edge_threshold: float = 1.5) -> Optional[Dict]:
     date_str, away_abbr, home_abbr, away_pitcher, home_pitcher = game_tuple
     year = int(date_str[:4])
 
@@ -519,7 +743,8 @@ def run_game(game_tuple: tuple, verbose: bool = True,
         print(f"    {away_abbr} wRC+: {away_wrc:.0f} | {home_abbr} wRC+: {home_wrc:.0f} | Park factor: {park}")
         print(f"\n  PROJECTION:")
         print(f"    {away_abbr} runs scored: {away_proj_scored:.1f}  |  {home_abbr} runs scored: {home_proj_scored:.1f}")
-        print(f"    Projected total: {proj_total:.1f}  |  Spread: {home_abbr} {proj_spread:+.1f}")
+        vegas_str = f" | Vegas: {vegas_total:.1f}" if vegas_total else ""
+        print(f"    Projected total: {proj_total:.1f}{vegas_str}  |  Spread: {home_abbr} {proj_spread:+.1f}")
         if actual_away is not None:
             actual_total = actual_away + actual_home
             delta = round(proj_total - actual_total, 2)
@@ -527,6 +752,15 @@ def run_game(game_tuple: tuple, verbose: bool = True,
             print(f"    Actual:    {away_abbr} {actual_away} – {home_abbr} {actual_home}  (total: {actual_total})")
             print(f"    Projected: {away_abbr} {away_proj_scored:.1f} – {home_abbr} {home_proj_scored:.1f}  (total: {proj_total:.1f})")
             print(f"    Delta:     {delta:+.1f} runs  {'✅' if abs(delta) <= 1.5 else '⚠️ ' if abs(delta) <= 2.5 else '❌'}")
+            if vegas_total:
+                bet = simulate_bet(proj_total, vegas_total, actual_total, edge_threshold)
+                if bet:
+                    sym = "✅" if bet["outcome"] == "WIN" else ("⬜" if bet["outcome"] == "PUSH" else "❌")
+                    print(f"    Vegas bet: Edge {bet['edge']:+.1f} → {bet['side']}  {sym} {bet['outcome']}"
+                          f"  ({bet['units']:+.1f}u)")
+                else:
+                    edge_val = proj_total - vegas_total
+                    print(f"    Vegas:     Edge {edge_val:+.1f} — below threshold, no bet")
         else:
             print(f"\n  ⚠  Actual score not available (game may not be in schedule data)")
 
@@ -534,7 +768,8 @@ def run_game(game_tuple: tuple, verbose: bool = True,
         return None
 
     actual_total = actual_away + actual_home
-    delta = round(proj_total - actual_total, 2)
+    delta        = round(proj_total - actual_total, 2)
+    bet          = simulate_bet(proj_total, vegas_total, actual_total, edge_threshold) if vegas_total else None
 
     return {
         "date":          date_str,
@@ -561,7 +796,8 @@ def run_game(game_tuple: tuple, verbose: bool = True,
         "abs_delta":     abs(delta),
         "within_1_5":    abs(delta) <= 1.5,
         "within_2_5":    abs(delta) <= 2.5,
-        "direction_right": (proj_total > actual_total) == (actual_total > 8.5),  # rough directional check
+        "vegas_total":   vegas_total,
+        "bet":           bet,
     }
 
 
@@ -657,23 +893,37 @@ def save_results(results: List[Dict]) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="SharpSportsPicks MLB Backtester")
-    parser.add_argument("--n",       type=int,  default=40,   help="Number of real games to sample (default: 40)")
-    parser.add_argument("--quiet",   action="store_true", help="Suppress per-game output, show summary only")
-    parser.add_argument("--season",  type=int,  default=2025, help="Season year (default: 2025)")
-    parser.add_argument("--seed",    type=int,  default=42,   help="Random seed for reproducibility")
+    parser.add_argument("--n",        type=int,  default=40,    help="Games to sample (default: 40)")
+    parser.add_argument("--quiet",    action="store_true",      help="Suppress per-game output")
+    parser.add_argument("--season",   type=int,  default=2025,  help="Season year (default: 2025)")
+    parser.add_argument("--seed",     type=int,  default=42,    help="Random seed")
+    parser.add_argument("--edge",     type=float, default=1.5,  help="Min model-vs-Vegas edge to bet (default: 1.5)")
+    parser.add_argument("--odds-csv", type=str,  default=None,  help="CSV with historical Vegas totals "
+                                                                       "(date,away_team,home_team,close_total)")
     args = parser.parse_args()
+
+    has_odds = (args.odds_csv is not None) or (2011 <= args.season <= 2021)
 
     print(f"\n{'═'*62}")
     print(f"  SharpSportsPicks AI — MLB Model Backtester")
     print(f"  Season: {args.season} | Target sample: {args.n} games")
     print(f"  Core model: Composite ERA = 0.60×SIERA + 0.40×xFIP")
     print(f"  Stats source: Full-season {args.season} Fangraphs (SIERA/xFIP/wRC+)")
-    print(f"  Game data: Real BR schedule (Win/Loss pitcher = starter proxy)")
+    print(f"  Game data:   Real BR schedule (Win/Loss pitcher = starter proxy)")
+    if has_odds:
+        print(f"  Vegas odds:  {'Custom CSV' if args.odds_csv else f'SBR {args.season} archive'} | "
+              f"Edge threshold: ≥{args.edge} runs")
+    else:
+        print(f"  Vegas odds:  Not available for {args.season} (use --season 2021 for free odds data)")
     print(f"  Note: weather, umpire, and form weights excluded (core only)")
     print(f"{'═'*62}")
+
     print(f"  Loading season stats...")
     _load_pitching(args.season)
     _load_batting(args.season)
+
+    # Load Vegas odds (if available)
+    odds_df = load_sbr_odds(args.season, args.odds_csv) if has_odds else pd.DataFrame()
 
     # Build real game list from actual schedule data
     games = build_real_games(args.season, n=args.n, seed=args.seed)
@@ -688,7 +938,11 @@ def main():
     skipped = 0
 
     for game_tuple, known_score in games:
-        result = run_game(game_tuple, verbose=not args.quiet, known_score=known_score)
+        date_str, away_abbr, home_abbr, _, _ = game_tuple
+        vt = get_vegas_total(date_str, away_abbr, home_abbr, odds_df) if not odds_df.empty else None
+        result = run_game(game_tuple, verbose=not args.quiet,
+                          known_score=known_score, vegas_total=vt,
+                          edge_threshold=args.edge)
         if result:
             results.append(result)
         else:
@@ -698,6 +952,8 @@ def main():
         print(f"\n  ⚠  {skipped} game(s) skipped — data unavailable or pitcher not found.")
 
     print_summary(results)
+    if has_odds:
+        print_betting_summary(results, args.edge)
     save_results(results)
 
 
