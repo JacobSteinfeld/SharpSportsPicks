@@ -7,6 +7,8 @@ to paste into Claude for persistent memory across conversations.
 
 Usage:
   python betting_tracker.py morning         → full morning routine (context card + daily prompt)
+                                              MLB days: auto-detects and builds combined game+props prompt
+  python betting_tracker.py lineup          → MLB lineup confirmation (run when lineups post, 1-6h before game)
   python betting_tracker.py night           → full night routine (log results + regenerate card)
   python betting_tracker.py add             → log a new pick
   python betting_tracker.py result          → update one pick interactively
@@ -642,29 +644,65 @@ def cmd_morning():
     print(f"\n  ✓ Context card saved     → {ctx_file}")
 
     # Step 3: Build daily_prompt_today.txt
-    agent_file = "daily_picks_agent_prompt.txt"
-    if not os.path.exists(agent_file):
-        print(f"  ✗ {agent_file} not found — skipping daily prompt build")
-    else:
-        with open(agent_file) as f:
-            agent_prompt = f.read()
-        agent_prompt = agent_prompt.replace("[INSERT DATE]", today.isoformat())
+    # Detect sport from daily_focus.txt to determine which prompt(s) to load
+    focus_content = ""
+    focus_block   = ""
+    if os.path.exists("daily_focus.txt"):
+        with open("daily_focus.txt") as f:
+            focus_content = f.read().strip()
+        if focus_content:
+            focus_block = f"\n\n════════════════════════════════════════════════════════════════\n  TODAY'S FOCUS / SPECIAL INSTRUCTIONS\n════════════════════════════════════════════════════════════════\n{focus_content}\n"
+            print(f"  ✓ Focus notes injected   → daily_focus.txt")
 
-        # Inject daily_focus.txt if it exists
-        focus_block = ""
-        if os.path.exists("daily_focus.txt"):
-            with open("daily_focus.txt") as f:
-                focus_content = f.read().strip()
-            if focus_content:
-                focus_block = f"\n\n════════════════════════════════════════════════════════════════\n  TODAY'S FOCUS / SPECIAL INSTRUCTIONS\n════════════════════════════════════════════════════════════════\n{focus_content}\n"
-                print(f"  ✓ Focus notes injected   → daily_focus.txt")
+    is_mlb = "MLB" in focus_content.upper()
 
-        daily_prompt = card + focus_block + "\n\n" + agent_prompt
+    if is_mlb:
+        # MLB day: build combined game + props prompt
+        sep = "\n\n" + "═" * 66 + "\n"
+        parts = [card, focus_block]
+        for label, fname in [("SECTION 1 OF 2 — MLB GAME MODEL", "mlb_game_prompt.txt"),
+                              ("SECTION 2 OF 2 — MLB PROPS MODEL", "mlb_props_prompt.txt")]:
+            if os.path.exists(fname):
+                with open(fname) as f:
+                    content = f.read().replace("[INSERT DATE]", today.isoformat())
+                parts.append(sep + f"  {label}\n" + "═" * 66 + "\n\n" + content)
+                print(f"  ✓ {fname} loaded")
+            else:
+                print(f"  ✗ {fname} not found — skipping")
+
+        daily_prompt = "\n".join(parts)
         prompt_file  = f"daily_prompt_{today.isoformat()}.txt"
         with open(prompt_file, "w") as f:
             f.write(daily_prompt)
-        print(f"  ✓ Daily prompt saved     → {prompt_file}")
-        print(f"\n  → Copy {prompt_file} and paste into Claude Agent to generate today's picks.")
+        print(f"  ✓ MLB combined prompt    → {prompt_file}")
+
+        # Generate lineup confirmation template for later today
+        lineup_file = f"lineup_check_{today.isoformat()}.txt"
+        if not os.path.exists(lineup_file):
+            _write_lineup_check(lineup_file, today)
+            print(f"  ✓ Lineup check template  → {lineup_file}")
+
+        print(f"\n  ⚠️  MLB LINEUP TIMING:")
+        print(f"     Lineups post 1–6 hours before first pitch.")
+        print(f"     STEP 1 now → paste {prompt_file} into Claude for pitcher/park/weather analysis.")
+        print(f"     STEP 2 later → run: python betting_tracker.py lineup")
+        print(f"     This finalizes picks with confirmed lineups before placing bets.")
+
+    else:
+        # Non-MLB day: standard single-prompt build
+        agent_file = "daily_picks_agent_prompt.txt"
+        if not os.path.exists(agent_file):
+            print(f"  ✗ {agent_file} not found — skipping daily prompt build")
+        else:
+            with open(agent_file) as f:
+                agent_prompt = f.read()
+            agent_prompt   = agent_prompt.replace("[INSERT DATE]", today.isoformat())
+            daily_prompt   = card + focus_block + "\n\n" + agent_prompt
+            prompt_file    = f"daily_prompt_{today.isoformat()}.txt"
+            with open(prompt_file, "w") as f:
+                f.write(daily_prompt)
+            print(f"  ✓ Daily prompt saved     → {prompt_file}")
+            print(f"\n  → Copy {prompt_file} and paste into Claude Agent to generate today's picks.")
 
 
 def cmd_night():
@@ -820,6 +858,110 @@ def cmd_night():
         print("  → Standard prompt tomorrow. No focus set.")
 
 
+def _write_lineup_check(filepath, today):
+    content = f"""══════════════════════════════════════════════════════════════════
+  SharpSportsPicks AI — MLB LINEUP CONFIRMATION
+  Run this when official lineups post (1–6 hours before first pitch)
+  Date: {today.isoformat()}
+══════════════════════════════════════════════════════════════════
+
+Official lineups are now posted. Paste this into Claude along with
+the morning model output. Confirm the following before placing any bets:
+
+────────────────────────────────────────────────────────────────
+1. STARTING PITCHERS — confirm, don't project
+────────────────────────────────────────────────────────────────
+  Check every game of interest. If the starter changed from
+  morning analysis → re-run the pitcher model for that game.
+  A starter change is a GAME-CHANGING event. Do not ignore it.
+
+────────────────────────────────────────────────────────────────
+2. LINEUP CONFIRMATION (spots 1–5 for each team)
+────────────────────────────────────────────────────────────────
+  For any game or prop in the morning model:
+  □ Is the batter confirmed in the lineup?
+  □ What batting order position? (affects PA count)
+  □ Any impact player (wRC+ > 125 vs hand) scratched?
+    → 1 missing: downgrade team wRC+ vs hand by 5 pts
+    → 2+ missing: downgrade by 10 pts
+  □ Any switch hitter confirmed? Pull the correct hand split.
+    (Switch hitters bat RH vs LHP, LH vs RHP)
+
+────────────────────────────────────────────────────────────────
+3. WEATHER UPDATE
+────────────────────────────────────────────────────────────────
+  Pull RotoWire one more time — rotowire.com/baseball/weather.php
+  Wind can shift significantly from morning forecast.
+  Wrigley Field especially: wind direction can flip.
+  If weather changed by 1+ tier → recalculate convergence score.
+  If wind flipped direction entirely → recalculate all adjustments.
+
+────────────────────────────────────────────────────────────────
+4. LINE MOVEMENT CHECK
+────────────────────────────────────────────────────────────────
+  Compare current lines to morning lines on DraftKings / FanDuel.
+  Sharp money signal: line moved 3+ cents with 70%+ public other side
+    → Fade the public, the sharp money is right.
+  If our model edge narrowed to < 0.5 runs due to line move → pass.
+  If line moved IN OUR FAVOR (more value now) → can increase units.
+
+────────────────────────────────────────────────────────────────
+5. LINE SHOPPING — always check before placing
+────────────────────────────────────────────────────────────────
+  Check: DraftKings | FanDuel | Caesars | BetMGM | PointsBet
+  Even 5 cents difference on odds adds up over a 162-game season.
+  Always take the best available number.
+
+────────────────────────────────────────────────────────────────
+MORNING MODEL OUTPUT (paste below):
+────────────────────────────────────────────────────────────────
+[PASTE MORNING ANALYSIS HERE]
+
+────────────────────────────────────────────────────────────────
+LINEUP / WEATHER CHANGES FROM MORNING:
+────────────────────────────────────────────────────────────────
+[NOTE ANY CHANGES HERE]
+
+────────────────────────────────────────────────────────────────
+FINAL CONFIRMED PICKS:
+────────────────────────────────────────────────────────────────
+[LIST FINAL PICKS AFTER CONFIRMATION]
+
+══════════════════════════════════════════════════════════════════
+After picks confirmed:  python betting_tracker.py add  (once per pick)
+End of night:           python betting_tracker.py night
+══════════════════════════════════════════════════════════════════
+"""
+    with open(filepath, "w") as f:
+        f.write(content)
+
+
+def cmd_lineup():
+    today  = date.today()
+    picks  = load_picks()
+    today_pending = [p for p in picks if p["result"] == "pending" and p["date"] == today.isoformat()]
+
+    print(f"\n── MLB Lineup Confirmation — {today.strftime('%A, %B %d %Y')} ──\n")
+    print("  Official lineups have posted. Time to finalize picks.\n")
+
+    if today_pending:
+        print(f"  Today's pending picks:")
+        for p in today_pending:
+            print(f"    #{p['id']} | {p['sport']} | {p['game']} | {p['pick']} @ {p['odds']}")
+        print()
+
+    lineup_file = f"lineup_check_{today.isoformat()}.txt"
+    if not os.path.exists(lineup_file):
+        _write_lineup_check(lineup_file, today)
+        print(f"  ✓ Lineup check template saved → {lineup_file}")
+    else:
+        print(f"  ✓ Lineup check template exists → {lineup_file}")
+
+    print(f"\n  → Paste {lineup_file} into Claude along with the morning model output.")
+    print(f"  → Confirm lineups, weather update, line movement, then log final picks.")
+    print(f"  → Run: python betting_tracker.py add  (once per confirmed pick)\n")
+
+
 def cmd_report():
     from datetime import timedelta
     picks   = load_picks()
@@ -968,6 +1110,7 @@ def cmd_report():
 
 COMMANDS = {
     "morning": cmd_morning,
+    "lineup":  cmd_lineup,
     "night":   cmd_night,
     "add":     cmd_add,
     "result":  cmd_result,

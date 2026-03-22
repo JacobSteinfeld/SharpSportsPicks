@@ -98,16 +98,48 @@ Implied runs from moneyline (back-solve):
 PHASE 3 — PROBABLE STARTERS + INJURY REPORT
 ════════════════════════════════════════════════════════════════
 
+LINEUP TIMING NOTE — CRITICAL FOR MLB:
+  Official lineups post 1–6 hours before first pitch (varies by game).
+  Day games (1pm ET): lineups may not be out during morning run.
+
+  TWO-PHASE MLB WORKFLOW:
+  PHASE A — MORNING (run now):
+    → Pull starting pitchers, park, weather, lines, umpire
+    → Build preliminary projections with EXPECTED lineups
+    → Identify games with edge potential — build watch list
+    → Do NOT finalize lineup-dependent picks yet
+  PHASE B — PRE-GAME (after lineups post):
+    → Run: python betting_tracker.py lineup
+    → Confirm actual lineups (scratches, batting order, switch hitters)
+    → Update any projections affected by lineup changes
+    → Check final weather, line movement, shop for best number
+    → Finalize and log picks
+
 For every game confirm:
-  - Starting pitcher both teams (confirmed, not projected)
+  - Starting pitcher both teams (confirmed vs projected — flag if projected)
   - Any lineup changes from expected
   - Injury report: OUT / QUESTIONABLE players
+  - SWITCH HITTERS in lineup — flag and pull correct split:
+      Switch hitters bat RH vs LHP, bat LH vs RHP
+      Use the split matching today's opposing pitcher hand
   - Catcher (affects pitcher framing and K rate):
       Pull catcher FRV (Framing Run Value) from Baseball Savant
       Elite framing (FRV ≥ +8): flag ✅ FRAMING EDGE — worth +0.4-0.6 Ks per start
       Poor framing (FRV ≤ -8): flag ⚠️ FRAMING DRAG — lose 0.3-0.5 Ks per start
   - Is any pitcher on short rest? (< 4 days)
   - Bullpen rest: top relievers days since last appearance
+
+UMPIRE (pull from umpscorecards.com — today's home plate ump):
+  - Called Strike % above/below average
+  - Runs above/below average per game (affects game total)
+  - K rate impact per game
+  Liberal umpire (+1.5 Ks/game avg): total projection +0.3 to +0.5 runs (more Ks = fewer baserunners)
+  Tight umpire (-1.5 Ks/game avg): total projection -0.3 to +0.5 runs (more walks/contact)
+  Flag in pick output: ✅ UMP FAVORS PITCHERS or ⚠️ UMP FAVORS HITTERS
+
+LINE SHOPPING NOTE:
+  Before finalizing any pick, check: DraftKings | FanDuel | Caesars | BetMGM
+  Always take the best available number. 5 cents on a total adds up over 162 games.
 
 Flag: [NONE] [MINOR] [MODERATE] [SIGNIFICANT] [GAME-CHANGING]
 Unadjusted line after significant injury news = potential edge

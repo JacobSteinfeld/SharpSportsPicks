@@ -201,20 +201,69 @@ CONVERGENCE OUTPUT FORMAT (show for every batter prop):
   Weather score: [+/-X] | Matchup score: [+/-X]
   CONVERGENCE: [+/-X total] → [🌪️/⛈️/🌧️] [label]
 
-── STEP 4: CONFIRM MATCHUP ─────────────────────────────────
+── STEP 4: UMPIRE ──────────────────────────────────────────
 
-  - Starting pitcher (confirmed, not projected)
+Pull from umpscorecards.com for today's home plate umpire:
+  - Called Strike % above/below average
+  - Runs above/below average per game
+  - K rate impact (extra Ks added or removed per game)
+
+UMPIRE ADJUSTMENT TABLE:
+  Liberal umpire (called strike % well above avg, +1.5 Ks/game):
+    → K props: add +1.0 to +1.5 Ks to projection
+    → Hit props: reduce hit rate × 0.97 (more called strikes = fewer hittable pitches)
+    → Flag: ✅ UMP EDGE — favors pitcher K overs
+  Tight umpire (called strike % well below avg, -1.5 Ks/game):
+    → K props: subtract -1.0 to -1.5 Ks from projection
+    → Hit props: slight boost × 1.02 (more balls in play)
+    → Flag: ⚠️ TIGHT UMP — avoid K overs, slight hits boost
+  Average umpire: no adjustment
+
+  Add umpire K adjustment to pitcher K projection before comparing to line.
+  Note umpire in pick output under matchup section.
+
+── STEP 5: CONFIRM MATCHUP ─────────────────────────────────
+
+  LINEUP TIMING NOTE — CRITICAL FOR MLB:
+  Official lineups post 1–6 hours before first pitch (varies by game).
+  Day games (1pm ET): lineups may not be out during morning run.
+  Night games (7pm ET): lineups typically out by ~2–4pm ET.
+
+  TWO-PHASE MLB WORKFLOW:
+  PHASE A — MORNING (run now, pre-lineup):
+    → Pull pitcher data, park factors, weather, lines, umpire
+    → Build preliminary projections using EXPECTED lineup
+    → Identify games of interest, build watch list
+    → Save as watchlist — do NOT place bets yet on lineup-dependent props
+  PHASE B — PRE-GAME (run after lineups post):
+    → Run: python betting_tracker.py lineup
+    → Confirm actual lineup (batting order, scratches, switch hitters)
+    → Update convergence score if weather changed
+    → Check line movement, shop for best number
+    → Finalize and place bets
+
+  - Starting pitcher (confirmed vs projected — note if projected)
   - Pitcher handedness (L or R)
-  - Expected lineup (check beat reporters or official lineup release)
+  - Expected lineup (note if official or projected)
   - Batting order position (leadoff vs cleanup affects PA count)
+  - SWITCH HITTERS — handle carefully:
+      Switch hitters bat RH vs LHP, bat LH vs RHP
+      Always pull the split matching today's pitcher:
+        vs LHP today → use batter's RH splits (BA vs RHP, wRC+ vs RHP)
+        vs RHP today → use batter's LH splits (BA vs LHP, wRC+ vs LHP)
+      Do NOT use overall splits for switch hitters.
   - Catcher framing (pull FRV from Baseball Savant):
-      Elite framing (FRV ≥ +8): ✅ adds +0.4-0.6 Ks to pitcher line → lean over on K props
-      Poor framing (FRV ≤ -8): ⚠️ costs 0.3-0.5 Ks → lean under on K props
+      Elite framing (FRV ≥ +8): ✅ adds +0.4-0.6 Ks to pitcher line
+      Poor framing (FRV ≤ -8): ⚠️ costs 0.3-0.5 Ks
+
+  LINE SHOPPING — always before placing:
+    Check: DraftKings | FanDuel | Caesars | BetMGM | PointsBet
+    5 cents difference in odds compounds significantly over 162 games.
 
 Flag any matchup uncertainty:
-  [CONFIRMED] — starter locked in, lineup posted
-  [PROJECTED] — starter likely but not official
-  [UNCERTAIN] — TBD, skip prop or note risk
+  [CONFIRMED] — starter locked in, lineup official
+  [PROJECTED] — starter likely but not official → note in pick, PHASE A only
+  [UNCERTAIN] — TBD, skip prop or defer to PHASE B
 
 ════════════════════════════════════════════════════════════════
 PHASE 2 — PITCHER PROPS
@@ -393,6 +442,13 @@ For each batter prop, pull from Fangraphs:
   → Always use the split matching the opposing pitcher's hand
   → Flag if platoon split is extreme (>30 wRC+ gap): ⚠️ PLATOON DISADVANTAGE or ✅ PLATOON EDGE
   → Example: batter with .310 BA vs RHP but .220 BA vs LHP facing LHP = fade the over on hits
+
+  SWITCH HITTER RULE:
+  Switch hitters bat from the side OPPOSITE the pitcher's throwing hand:
+    Facing LHP → batter hits RH → use batter's vs-RHP splits
+    Facing RHP → batter hits LH → use batter's vs-LHP splits
+  Common switch hitters: note and confirm in lineup phase.
+  Career matchup data for switch hitters: check which hand they batted in those PAs.
 
   BATTER vs PITCHER CAREER HISTORY + CREDIBILITY GATE:
     Pull from Baseball Savant (filter by batter + pitcher pairing):
@@ -646,22 +702,29 @@ STEP 4: Apply park factor
     90-110: neutral
     < 90: multiply × 0.90
 
-STEP 5: Apply park, weather, and convergence (from Phase 1)
-  If DOME: apply park HR factor only, skip weather
-  Apply park HR factor multiplier (from Phase 1 Step 2 table)
-  Apply temperature multiplier from Phase 1 table (HR column)
-  Apply wind multiplier from Phase 1 table (HR column) — pull-side direction is critical here:
-    RH batter + wind out to LF or CF = full multiplier
-    RH batter + wind out to RF = 40% of multiplier
-    LH batter + wind out to RF or CF = full multiplier
-    LH batter + wind out to LF = 40% of multiplier
-  Convergence boost (this is the most important HR adjustment):
-    Full Convergence (+7): HR probability × 1.20 → line is significantly mispriced
-    Strong Convergence (+4 to +6): HR probability × 1.12
-    Mild Positive (+1 to +3): HR probability × 1.05
-    Mild Negative (-1 to -3): HR probability × 0.95
-    Strong Suppression (-4 to -6): HR probability × 0.88
-    Full Suppression (-7): HR probability × 0.80 → line likely overpriced even at +250
+STEP 5: Apply convergence multiplier (from Phase 1) — HR ONLY
+  ⚠️  DOUBLE-COUNT WARNING: The Phase 1 Convergence Score already incorporates
+  weather (temperature + wind) and park scores. For HR props, use the
+  CONVERGENCE MULTIPLIER as the sole weather+park+matchup adjustment.
+  Do NOT separately apply the individual temp and wind multipliers for HR —
+  they are already captured inside the convergence score.
+
+  If DOME: set park score to 0 in convergence calculation. Apply park HR factor only.
+
+  Pull-side direction (feeds into convergence weather score, not applied separately):
+    RH batter + wind out to LF/CF = full wind score
+    RH batter + wind out to RF = 40% of wind score
+    LH batter + wind out to RF/CF = full wind score
+    LH batter + wind out to LF = 40% of wind score
+
+  CONVERGENCE MULTIPLIER (sole HR adjustment for weather+park+matchup):
+    Full Convergence (score ≥ +7):  HR probability × 1.20
+    Strong Convergence (+4 to +6):  HR probability × 1.12
+    Mild Positive (+1 to +3):       HR probability × 1.05
+    Neutral (-0 to 0):              no adjustment
+    Mild Negative (-1 to -3):       HR probability × 0.95
+    Strong Suppression (-4 to -6):  HR probability × 0.88
+    Full Suppression (score ≤ -7):  HR probability × 0.80
 
 STEP 6: Compare to line
   HR prop is usually Over 0.5 at +200 to +350
